@@ -1,5 +1,5 @@
 {
-  "name": "angular1-boilerplate",
+  "name": "angular1-quickstart",
   "version": "1.0.0",
   "description": "AngularJS 1.x Boilerplate to kick start your new project",
   "readme": "README.md",
@@ -9,14 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/madhusudhand/angular1-boilerplate"
+    "url": "git+https://github.com/madhusudhand/angular1-quickstart"
   },
   "keywords": [
     "material"
   ],
   "author": "Madhusudhan Dollu",
   "license": "MIT",
-  "homepage": "https://github.com/madhusudhand/angular2-boilerplate/blob/master/README.md",
+  "homepage": "https://github.com/madhusudhand/angular2-quickstart/blob/master/README.md",
   "devDependencies": {
     "grunt": "^0.4.5",
     "grunt-contrib-clean": "^1.0.0",
