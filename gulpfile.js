@@ -24,7 +24,14 @@ gulp.task('copy', () => {
     'node_modules/bootstrap/dist/css/bootstrap.min.css',
     'node_modules/bootstrap/dist/js/bootstrap.min.js',
     'node_modules/jquery/dist/jquery.min.js',
-    'node_modules/d3/build/d3.min.js'
+    'node_modules/lodash/lodash.min.js',
+    'node_modules/cytoscape/dist/cytoscape.js',
+    'node_modules/qtip/qtip.min.js',
+    'node_modules/qtip/css/qtip.css',
+    'node_modules/qtip/css/theme.css',
+    'node_modules/require/require.min.js',
+    'node_modules/typeahead/typeahead.js',
+    'node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js'
   ])
   .pipe(gulp.dest('dist/vendor'));
 
