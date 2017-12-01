@@ -271,11 +271,12 @@
       cy = (window as any).cy = cytoscape({
         container: $element.find('.container')[0],
         layout: { 
-          name: 'cola',
+          name: 'dagre',
           weaver: true, 
+          nodeSep: 1000,
           directed: true,
           fit:false, 
-          boundingBox: {x1: -1000 ,y1: 0,x2: 1000,y2: 20000}},
+          boundingBox: {x1: -100000 ,y1: 0,x2: 100000,y2: 10000}} as any,
         //style: styleJson,
         elements: elements,
         motionBlur: true,
