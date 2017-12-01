@@ -18,7 +18,7 @@
         var cy;
         // get exported json from cytoscape desktop via ajax
         var graphP = $.ajax({
-            url: 'https://cdn.rawgit.com/maxkfranz/3d4d3c8eb808bd95bae7/raw',
+            url: '../../data/example.json',
             // url: './data.json',
             type: 'GET',
             dataType: 'json'
@@ -186,30 +186,42 @@
         function hideNodeInfo() {
             $('#info').hide();
         }
+        var createCyData = function (data, convertedData, parentName) {
+            convertedData.push({
+                data: {
+                    id: data.name
+                },
+                style: {
+                    shape: 'triangle'
+                }
+            });
+            convertedData.push({
+                data: {
+                    id: parentName + " to " + data.name,
+                    source: parentName,
+                    target: data.name
+                },
+                style: {}
+            });
+            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name); });
+        };
         function initCy(then) {
             var loading = document.getElementById('loading');
             var expJson = then[0];
             var styleJson = then[1];
-            var elements = expJson.elements;
-            elements.nodes.forEach(function (n) {
-                var data = n.data;
-                data.NodeTypeFormatted = data.NodeType;
-                if (data.NodeTypeFormatted === 'RedWine') {
-                    data.NodeTypeFormatted = 'Red Wine';
-                }
-                else if (data.NodeTypeFormatted === 'WhiteWine') {
-                    data.NodeTypeFormatted = 'White Wine';
-                }
-                n.data.orgPos = {
-                    x: n.position.x,
-                    y: n.position.y
-                };
-            });
+            var elements = [];
+            createCyData(expJson, elements);
             $(loading).addClass('loaded');
             cy = window.cy = cytoscape({
                 container: $element.find('.container')[0],
-                layout: { name: 'cose-bilkent', fit: false, nodeRepulsion: 10000, gravity: 0.1, numIter: 10000, idealEdgeLength: 200 },
-                style: styleJson,
+                layout: {
+                    name: 'cola',
+                    weaver: true,
+                    directed: true,
+                    fit: false,
+                    boundingBox: { x1: -1000, y1: 0, x2: 1000, y2: 20000 }
+                },
+                //style: styleJson,
                 elements: elements,
                 motionBlur: true,
                 selectionType: 'single',
@@ -217,6 +229,7 @@
                 autoungrabify: true
             });
             allNodes = cy.nodes();
+            console.log(allNodes.length);
             allEles = cy.elements();
             cy.on('free', 'node', function (e) {
                 var n = e.cyTarget;

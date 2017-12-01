@@ -31,9 +31,17 @@ gulp.task('copy', () => {
     'node_modules/qtip/css/theme.css',
     'node_modules/require/require.min.js',
     'node_modules/typeahead/typeahead.js',
-    'node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js'
+    'node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js',
+    'node_modules/weaverjs/dist/weaver.js',
+    'node_modules/cytoscape-spread/cytoscape-spread.js',
+    'node_modules/webcola/WebCola/cola.min.js',
+    'node_modules/cytoscape-cola/cytoscape-cola.js'
   ])
   .pipe(gulp.dest('dist/vendor'));
+    gulp.src([
+      'data/example.json'
+    ])
+    .pipe(gulp.dest('dist/data'));
 
   gulp.src([
     'sample-data.json'
