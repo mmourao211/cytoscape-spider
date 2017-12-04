@@ -19,6 +19,7 @@
         // get exported json from cytoscape desktop via ajax
         var graphP = $.ajax({
             url: '../../data/example.json',
+            //url: '../../data/example-3276.json', // wine-and-cheese.json
             // url: './data.json',
             type: 'GET',
             dataType: 'json'
@@ -186,24 +187,74 @@
         function hideNodeInfo() {
             $('#info').hide();
         }
-        var createCyData = function (data, convertedData, parentName) {
-            convertedData.push({
+        var levelCounters = [];
+        var maxLevel = 8;
+        var getX = function (self, children, level, levelCounters) {
+            if (!levelCounters[level])
+                levelCounters[level] = 0;
+            if (!children.length) {
+                for (var i = level; i < maxLevel + 1; i++) {
+                    if (!levelCounters[i])
+                        levelCounters[i] = 0;
+                    levelCounters[i] += 1;
+                }
+                self.x = levelCounters[level];
+                self.size = 1;
+                return self.x;
+            }
+            else {
+                var first, last, size;
+                size = 0;
+                for (var j = 0; j < children.length; j++) {
+                    var child = children[j];
+                    if (!child.x)
+                        child.x = getX(child, child.children, level + 1, levelCounters);
+                    if (j == 0)
+                        first = child.x;
+                    if (j == children.length - 1)
+                        last = child.x;
+                    size += child.size;
+                }
+                self.size = size * (level) / (maxLevel);
+                levelCounters[level] = last;
+                return (first + last) / 2;
+            }
+        };
+        var createCyData = function (data, convertedData, parentName, level) {
+            if (!level)
+                level = 1;
+            var node = {
                 data: {
                     id: data.name
                 },
-                style: {
-                    shape: 'triangle'
-                }
-            });
+                position: null,
+                style: null
+            };
+            convertedData.push(node);
             convertedData.push({
                 data: {
                     id: parentName + " to " + data.name,
                     source: parentName,
                     target: data.name
                 },
-                style: {}
+                style: {
+                    'target-arrow-color': 'black',
+                    'target-arrow-shape': 'triangle'
+                }
             });
-            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name); });
+            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name, level + 1); });
+            node.position = {
+                x: 100 * (data.x ? data.x : getX(data, data.children, level, levelCounters)),
+                y: 1000 * level
+            };
+            node.style = {
+                width: maxLevel * data.size,
+                height: maxLevel * data.size,
+                label: data.name,
+                'font-size': Math.floor(8 * maxLevel / level),
+                'min-zoomed-font-size': 8
+            };
+            // console.log('x:' + node.position.x + ' y:' + node.position.y)
         };
         function initCy(then) {
             var loading = document.getElementById('loading');
@@ -215,47 +266,48 @@
             cy = window.cy = cytoscape({
                 container: $element.find('.container')[0],
                 layout: {
-                    name: 'dagre',
-                    weaver: true,
-                    nodeSep: 1000,
-                    directed: true,
-                    fit: false,
-                    boundingBox: { x1: -100000, y1: 0, x2: 100000, y2: 10000 }
+                    name: 'preset',
+                    boundingBox: { x1: 0, y1: 0, x2: 1000000, y2: 100000 }
                 },
                 //style: styleJson,
                 elements: elements,
                 motionBlur: true,
                 selectionType: 'single',
                 boxSelectionEnabled: false,
-                autoungrabify: true
+                autoungrabify: true,
+                //pixelRatio: 1,
+                //textureOnViewport: true,
+                hideEdgesOnViewport: true
             });
-            allNodes = cy.nodes();
-            console.log(allNodes.length);
-            allEles = cy.elements();
-            cy.on('free', 'node', function (e) {
-                var n = e.cyTarget;
-                var p = n.position();
-                n.data('orgPos', {
-                    x: p.x,
-                    y: p.y
-                });
-            });
-            cy.on('tap', function () {
-                $('#search').blur();
-            });
-            cy.on('select unselect', 'node', _.debounce(function (e) {
-                var node = cy.$('node:selected');
-                if (node.nonempty()) {
-                    // showNodeInfo( node );
-                    $q.when().then(function () {
-                        return highlight(node);
-                    });
-                }
-                else {
-                    hideNodeInfo();
-                    clear();
-                }
-            }, 100));
+            setTimeout(function () {
+                cy.fit(cy.$id(expJson.name), 200);
+            }, 1000);
+            // allNodes = cy.nodes();
+            // console.log(allNodes.length)
+            // allEles = cy.elements();
+            // cy.on('free', 'node', function( e ){
+            //   var n = e.cyTarget;
+            //   var p = n.position();
+            //   n.data('orgPos', {
+            //     x: p.x,
+            //     y: p.y
+            //   });
+            // });
+            // cy.on('tap', function(){
+            //   $('#search').blur();
+            // });
+            // cy.on('select unselect', 'node', _.debounce( function(e){
+            //   var node = cy.$('node:selected');
+            //   if( node.nonempty() ){
+            //     // showNodeInfo( node );
+            //     $q.when().then(function(){
+            //       return highlight( node );
+            //     });
+            //   } else {
+            //     hideNodeInfo();
+            //     clear();
+            //   }
+            // }, 100 ) );
         }
         var lastSearch = '';
         $('#reset').on('click', function () {

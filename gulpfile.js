@@ -41,6 +41,7 @@ gulp.task('copy', () => {
   ])
   .pipe(gulp.dest('dist/vendor'));
     gulp.src([
+      'data/example-3276.json',
       'data/example.json'
     ])
     .pipe(gulp.dest('dist/data'));
