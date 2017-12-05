@@ -17,13 +17,13 @@
         var easing = 'linear';
         var cy;
         // get exported json from cytoscape desktop via ajax
-        var graphP = $.ajax({
-            url: '../../data/example.json',
+        var graphP = function () { return $.ajax({
+            url: '../../data/example.json?_=' + new Date().getTime(),
             //url: '../../data/example-3276.json', // wine-and-cheese.json
             // url: './data.json',
             type: 'GET',
             dataType: 'json'
-        });
+        }); };
         // also get style via ajax
         var styleP = $.ajax({
             url: 'http://www.wineandcheesemap.com/style.cycss',
@@ -31,7 +31,7 @@
             dataType: 'text'
         });
         // when both graph export json and style loaded, init cy
-        $q.all([graphP, styleP]).then(initCy);
+        var refreshAll = function (layoutType) { return $q.all([graphP(), styleP]).then(function (data) { return initCy(data, layoutType); }); };
         var allNodes = null;
         var allEles = null;
         var lastHighlighted = null;
@@ -189,6 +189,23 @@
         }
         var levelCounters = [];
         var maxLevel = 8;
+        var getFractalPosition = function (self, R, oldTheta) {
+            if (!self.children.length)
+                return;
+            if (!R)
+                R = 5000;
+            if (!oldTheta)
+                oldTheta = Math.PI;
+            var n = self.children.length;
+            var theta = 2 * Math.PI / n;
+            var newR = R * Math.sin(6 * oldTheta / 20);
+            for (var k = 0; k < n; k++) {
+                var child = self.children[k];
+                child.x = self.x + newR * Math.cos(theta * k);
+                child.y = self.y + newR * Math.sin(theta * k);
+                getFractalPosition(child, newR, theta);
+            }
+        };
         var getX = function (self, children, level, levelCounters) {
             if (!levelCounters[level])
                 levelCounters[level] = 0;
@@ -220,7 +237,7 @@
                 return (first + last) / 2;
             }
         };
-        var createCyData = function (data, convertedData, parentName, level) {
+        var createCyData = function (data, convertedData, parentName, level, layoutType) {
             if (!level)
                 level = 1;
             var node = {
@@ -231,37 +248,62 @@
                 style: null
             };
             convertedData.push(node);
-            convertedData.push({
-                data: {
-                    id: parentName + " to " + data.name,
-                    source: parentName,
-                    target: data.name
-                },
-                style: {
-                    'target-arrow-color': 'black',
-                    'target-arrow-shape': 'triangle'
-                }
-            });
-            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name, level + 1); });
-            node.position = {
-                x: 100 * (data.x ? data.x : getX(data, data.children, level, levelCounters)),
-                y: 1000 * level
-            };
-            node.style = {
-                width: maxLevel * data.size,
-                height: maxLevel * data.size,
-                label: data.name,
-                'font-size': Math.floor(8 * maxLevel / level),
-                'min-zoomed-font-size': 8
-            };
+            if (parentName)
+                convertedData.push({
+                    data: {
+                        id: parentName + " to " + data.name,
+                        source: parentName,
+                        target: data.name
+                    },
+                    style: {
+                        width: layoutType == 'tree' ? 1 : 3 / level,
+                    }
+                });
+            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name, level + 1, layoutType); });
+            if (layoutType == 'tree') {
+                node.position = {
+                    y: 100 * (data.x ? data.x : getX(data, data.children, level, levelCounters)),
+                    x: 1500 * level
+                };
+                node.style = {
+                    width: 5 * data.size,
+                    height: 5 * data.size,
+                    label: data.name,
+                    'font-size': Math.floor(8 * maxLevel / level),
+                    'min-zoomed-font-size': 8
+                };
+            }
+            else if (layoutType == 'fractal') {
+                node.position = {
+                    x: data.x,
+                    y: data.y
+                };
+                node.style = {
+                    width: 24 / level,
+                    height: 24 / level,
+                };
+            }
             // console.log('x:' + node.position.x + ' y:' + node.position.y)
         };
-        function initCy(then) {
+        vm.draw = function (layoutType) {
+            refreshAll(layoutType);
+        };
+        function initCy(then, layoutType) {
             var loading = document.getElementById('loading');
             var expJson = then[0];
             var styleJson = then[1];
             var elements = [];
-            createCyData(expJson, elements);
+            if (!layoutType)
+                layoutType = 'fractal';
+            if (layoutType == 'fractal') {
+                expJson.x = 0;
+                expJson.y = 0;
+                getFractalPosition(expJson, 0);
+            }
+            else if (layoutType == 'tree') {
+                levelCounters = [];
+            }
+            createCyData(expJson, elements, null, null, layoutType);
             $(loading).addClass('loaded');
             cy = window.cy = cytoscape({
                 container: $element.find('.container')[0],
@@ -280,7 +322,20 @@
                 hideEdgesOnViewport: true
             });
             setTimeout(function () {
-                cy.fit(cy.$id(expJson.name), 200);
+                cy.expandCollapse({
+                    layoutBy: {
+                        name: 'preset',
+                        boundingBox: { x1: 0, y1: 0, x2: 1000000, y2: 100000 }
+                    },
+                    fisheye: true,
+                    animate: true,
+                    undoable: false
+                });
+                var api = cy.expandCollapse('get');
+                var node = cy.$id('ab2c3a33-13d0-4386-782d-5e830bbc8b66');
+                //api.collapseRecursively(node)
+                api.collapseAll();
+                cy.fit(node, 200);
             }, 1000);
             // allNodes = cy.nodes();
             // console.log(allNodes.length)
