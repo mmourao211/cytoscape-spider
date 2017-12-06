@@ -38,7 +38,9 @@ gulp.task('copy', () => {
     'node_modules/cytoscape-cola/cytoscape-cola.js',
     'node_modules/dagre/dist/dagre.min.js',
     'node_modules/cytoscape-dagre/cytoscape-dagre.js',
-    'node_modules/cytoscape-expand-collapse/cytoscape-expand-collapse.js'
+    'node_modules/cytoscape-expand-collapse/cytoscape-expand-collapse.js',
+    'node_modules/cytoscape-context-menus/cytoscape-context-menus.js',
+    'node_modules/cytoscape-context-menus/cytoscape-context-menus.css'
   ])
   .pipe(gulp.dest('dist/vendor'));
     gulp.src([

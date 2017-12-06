@@ -15,11 +15,11 @@
         var layoutPadding = 50;
         var aniDur = 500;
         var easing = 'linear';
-        var cy;
+        var cy, dataset, dict;
         // get exported json from cytoscape desktop via ajax
         var graphP = function () { return $.ajax({
             url: '../../data/example.json?_=' + new Date().getTime(),
-            //url: '../../data/example-3276.json', // wine-and-cheese.json
+            //url: '../../data/example-3276.json?_=' + new Date().getTime(), // wine-and-cheese.json
             // url: './data.json',
             type: 'GET',
             dataType: 'json'
@@ -30,8 +30,155 @@
             type: 'GET',
             dataType: 'text'
         });
+        var drawNodesStartingAtRoot = function (root, layoutType, convertedData, maxExpandedLevel) {
+            if (cy.$id(root.name).length == 0) {
+                var node = {
+                    data: {
+                        id: root.name,
+                        ancestors: root.ancestorList
+                    },
+                    position: null,
+                    style: null
+                };
+                convertedData.push(node);
+                if (root.parentName)
+                    convertedData.push({
+                        data: {
+                            id: root.parentName + " to " + root.name,
+                            source: root.parentName,
+                            target: root.name
+                        },
+                        style: {
+                            width: layoutType == 'tree' ? 64 / Math.pow(root.level, 1.7) : 3 / root.level,
+                        }
+                    });
+                if (layoutType == 'tree') {
+                    node.position = {
+                        y: 30 * root.y,
+                        x: 7000 * Math.log(root.level)
+                    };
+                    node.style = {
+                        'content': 'XLSX',
+                        'text-valign': 'center',
+                        'color': 'white',
+                        'font-size': (8 * Math.pow(root.size, 1.7)).toString() + 'px',
+                        'text-outline-color': '#888',
+                        'background-color': '#888',
+                        width: 16 * Math.pow(root.size, 1.7),
+                        height: 16 * Math.pow(root.size, 1.7)
+                    };
+                }
+                else if (layoutType == 'fractal') {
+                    node.position = {
+                        x: root.x,
+                        y: root.y
+                    };
+                    node.style = {
+                        'content': 'XLSX',
+                        'text-valign': 'center',
+                        'color': 'white',
+                        'font-size': (8 * Math.pow(maxLevel - root.level + 1, 1.7)).toString() + 'px',
+                        'text-outline-color': '#888',
+                        'background-color': '#888',
+                        width: 16 * Math.pow(maxLevel - root.level + 1, 1.7),
+                        height: 16 * Math.pow(maxLevel - root.level + 1, 1.7),
+                    };
+                }
+            }
+            if (root.level == maxExpandedLevel && root.children.length) {
+                node.style.shape = 'rectangle';
+                node.style.content = '+' + root.count;
+            }
+            else if (root.children.length)
+                for (var i = 0; i < root.children.length; i++) {
+                    drawNodesStartingAtRoot(root.children[i], layoutType, convertedData, maxExpandedLevel);
+                }
+        };
+        var populateLevelCounts = function (root, levelCounts) {
+            if (!levelCounts[root.level])
+                levelCounts[root.level] = 0;
+            levelCounts[root.level]++;
+            if (root.children.length)
+                for (var i = 0; i < root.children.length; i++)
+                    populateLevelCounts(root.children[i], levelCounts);
+        };
+        var getMaxExpandedLevel = function (levelCounts) {
+            var s = 0;
+            var j;
+            for (var i = 0; i < levelCounts.length; i++) {
+                var levelCount = levelCounts[i] ? levelCounts[i] : 0;
+                s += levelCount;
+                if (s < 500)
+                    j = i + 1;
+                else
+                    break;
+            }
+            return j;
+        };
+        var drawUpwards = function (root, layoutType) {
+            var convertedData = [];
+            while (root.parentName) {
+                root = dict[root.parentName];
+                var node = {
+                    data: {
+                        id: root.name,
+                        ancestors: root.ancestorList
+                    },
+                    position: null,
+                    style: null
+                };
+                convertedData.push(node);
+                if (layoutType == 'tree') {
+                    node.position = {
+                        y: 30 * root.y,
+                        x: 7000 * Math.log(root.level)
+                    };
+                    node.style = {
+                        'content': 'XLSX',
+                        'text-valign': 'center',
+                        'color': 'white',
+                        'font-size': (8 * Math.pow(root.size, 1.7)).toString() + 'px',
+                        'text-outline-color': '#888',
+                        'background-color': '#888',
+                        width: 16 * Math.pow(root.size, 1.7),
+                        height: 16 * Math.pow(root.size, 1.7)
+                    };
+                }
+                else if (layoutType == 'fractal') {
+                    node.position = {
+                        x: root.x,
+                        y: root.y
+                    };
+                    node.style = {
+                        'content': 'XLSX',
+                        'text-valign': 'center',
+                        'color': 'white',
+                        'font-size': (8 * Math.pow(maxLevel - root.level + 1, 1.7)).toString() + 'px',
+                        'text-outline-color': '#888',
+                        'background-color': '#888',
+                        width: 16 * Math.pow(maxLevel - root.level + 1, 1.7),
+                        height: 16 * Math.pow(maxLevel - root.level + 1, 1.7),
+                    };
+                }
+            }
+            cy.add(convertedData);
+        };
+        var drawNodes = function (id, layoutType) {
+            var root = dict[id];
+            var convertedData = [];
+            var levelCounts = [];
+            populateLevelCounts(root, levelCounts);
+            var maxExpandedLevel = getMaxExpandedLevel(levelCounts);
+            drawUpwards(root, layoutType);
+            drawNodesStartingAtRoot(root, layoutType, convertedData, maxExpandedLevel);
+            cy.add(convertedData);
+        };
         // when both graph export json and style loaded, init cy
-        var refreshAll = function (layoutType) { return $q.all([graphP(), styleP]).then(function (data) { return initCy(data, layoutType); }); };
+        var refreshAll = function (layoutType) { return $q.all([graphP(), styleP]).then(function (data) {
+            initCy(data, layoutType);
+            drawNodes(dataset.name, layoutType);
+            cy.fit(cy.$id(dataset.name), 200);
+        }); };
         var allNodes = null;
         var allEles = null;
         var lastHighlighted = null;
@@ -206,249 +353,143 @@
                 getFractalPosition(child, newR, theta);
             }
         };
-        var getX = function (self, children, level, levelCounters) {
+        var getY = function (self, level, levelCounters) {
             if (!levelCounters[level])
                 levelCounters[level] = 0;
+            self.size = 12 * (1 - level / (maxLevel + 1));
+            var children = self.children;
             if (!children.length) {
                 for (var i = level; i < maxLevel + 1; i++) {
                     if (!levelCounters[i])
                         levelCounters[i] = 0;
                     levelCounters[i] += 1;
                 }
-                self.x = levelCounters[level];
-                self.size = 1;
-                return self.x;
+                self.y = levelCounters[level];
+                return self.y;
             }
             else {
-                var first, last, size;
-                size = 0;
+                var first, last;
                 for (var j = 0; j < children.length; j++) {
                     var child = children[j];
-                    if (!child.x)
-                        child.x = getX(child, child.children, level + 1, levelCounters);
+                    if (!child.y)
+                        child.y = getY(child, level + 1, levelCounters);
                     if (j == 0)
-                        first = child.x;
+                        first = child.y;
                     if (j == children.length - 1)
-                        last = child.x;
-                    size += child.size;
+                        last = child.y;
                 }
-                self.size = size * (level) / (maxLevel);
                 levelCounters[level] = last;
                 return (first + last) / 2;
             }
         };
-        var createCyData = function (data, convertedData, parentName, level, layoutType) {
+        var getChildrenCount = function (parent) {
+            if (!parent.count)
+                parent.count = _.sumBy(parent.children, function (child) { return getChildrenCount(child); }) + 1;
+            return parent.count;
+        };
+        var createCyData = function (root, parentName, level, layoutType, ancestorList) {
             if (!level)
                 level = 1;
-            var node = {
-                data: {
-                    id: data.name
-                },
-                position: null,
-                style: null
-            };
-            convertedData.push(node);
-            if (parentName)
-                convertedData.push({
-                    data: {
-                        id: parentName + " to " + data.name,
-                        source: parentName,
-                        target: data.name
-                    },
-                    style: {
-                        width: layoutType == 'tree' ? 1 : 3 / level,
-                    }
-                });
-            _.each(data.children, function (child) { return createCyData(child, convertedData, data.name, level + 1, layoutType); });
+            dict[root.name] = root;
+            root.count = getChildrenCount(root);
+            root.level = level;
+            root.ancestorList = ancestorList;
+            root.parentName = parentName;
+            _.each(root.children, function (child) { return createCyData(child, root.name, level + 1, layoutType, ancestorList + (" -" + root.name + "- ")); });
             if (layoutType == 'tree') {
-                node.position = {
-                    y: 100 * (data.x ? data.x : getX(data, data.children, level, levelCounters)),
-                    x: 1500 * level
-                };
-                node.style = {
-                    width: 5 * data.size,
-                    height: 5 * data.size,
-                    label: data.name,
-                    'font-size': Math.floor(8 * maxLevel / level),
-                    'min-zoomed-font-size': 8
-                };
+                root.x = root.x ? root.x : 7000 * Math.log(level);
+                root.y = root.y ? root.y : getY(root, level, levelCounters);
             }
             else if (layoutType == 'fractal') {
-                node.position = {
-                    x: data.x,
-                    y: data.y
-                };
-                node.style = {
-                    width: 24 / level,
-                    height: 24 / level,
-                };
             }
-            // console.log('x:' + node.position.x + ' y:' + node.position.y)
         };
         vm.draw = function (layoutType) {
             refreshAll(layoutType);
         };
         function initCy(then, layoutType) {
             var loading = document.getElementById('loading');
-            var expJson = then[0];
+            dataset = then[0];
             var styleJson = then[1];
             var elements = [];
             if (!layoutType)
                 layoutType = 'fractal';
             if (layoutType == 'fractal') {
-                expJson.x = 0;
-                expJson.y = 0;
-                getFractalPosition(expJson, 0);
+                dataset.x = 0;
+                dataset.y = 0;
+                getFractalPosition(dataset, 0);
             }
             else if (layoutType == 'tree') {
                 levelCounters = [];
             }
-            createCyData(expJson, elements, null, null, layoutType);
-            $(loading).addClass('loaded');
+            dict = {};
+            createCyData(dataset, null, null, layoutType, '');
             cy = window.cy = cytoscape({
                 container: $element.find('.container')[0],
                 layout: {
                     name: 'preset',
                     boundingBox: { x1: 0, y1: 0, x2: 1000000, y2: 100000 }
                 },
-                //style: styleJson,
-                elements: elements,
                 motionBlur: true,
                 selectionType: 'single',
                 boxSelectionEnabled: false,
                 autoungrabify: true,
-                //pixelRatio: 1,
-                //textureOnViewport: true,
-                hideEdgesOnViewport: true
+                hideEdgesOnViewport: true,
+                style: cytoscape.stylesheet()
+                    .selector('node')
+                    .css({
+                    'text-valign': 'center',
+                    'color': 'white',
+                    'text-outline-width': 2,
+                    'text-outline-color': '#888',
+                    'background-color': '#888'
+                })
             });
-            setTimeout(function () {
-                cy.expandCollapse({
-                    layoutBy: {
-                        name: 'preset',
-                        boundingBox: { x1: 0, y1: 0, x2: 1000000, y2: 100000 }
+            var options = {
+                // List of initial menu items
+                menuItems: [
+                    {
+                        id: 'collapse',
+                        content: 'Collapse',
+                        tooltipText: 'Collapse',
+                        selector: 'node',
+                        onClickFunction: function (event) {
+                            var target = event.target || event.cyTarget;
+                            cy.remove(cy.$("[ancestors *= \"-" + target.id() + "-\"]"));
+                            target.style('shape', 'rectangle');
+                            target.style('content', '+' + getChildrenCount(dict[target.id()]));
+                        }
                     },
-                    fisheye: true,
-                    animate: true,
-                    undoable: false
-                });
-                var api = cy.expandCollapse('get');
-                var node = cy.$id('ab2c3a33-13d0-4386-782d-5e830bbc8b66');
-                //api.collapseRecursively(node)
-                api.collapseAll();
-                cy.fit(node, 200);
-            }, 1000);
-            // allNodes = cy.nodes();
-            // console.log(allNodes.length)
-            // allEles = cy.elements();
-            // cy.on('free', 'node', function( e ){
-            //   var n = e.cyTarget;
-            //   var p = n.position();
-            //   n.data('orgPos', {
-            //     x: p.x,
-            //     y: p.y
-            //   });
-            // });
-            // cy.on('tap', function(){
-            //   $('#search').blur();
-            // });
-            // cy.on('select unselect', 'node', _.debounce( function(e){
-            //   var node = cy.$('node:selected');
-            //   if( node.nonempty() ){
-            //     // showNodeInfo( node );
-            //     $q.when().then(function(){
-            //       return highlight( node );
-            //     });
-            //   } else {
-            //     hideNodeInfo();
-            //     clear();
-            //   }
-            // }, 100 ) );
+                    {
+                        id: 'start-from',
+                        content: 'Start from here',
+                        tooltipText: 'Start from here',
+                        selector: 'node',
+                        onClickFunction: function (event) {
+                            var target = event.target || event.cyTarget;
+                            var id = target.id();
+                            cy.remove(cy.nodes());
+                            drawNodes(id, layoutType);
+                        }
+                    },
+                    {
+                        id: 'focus',
+                        content: 'Focus',
+                        tooltipText: 'Focus',
+                        selector: 'node',
+                        onClickFunction: function (event) {
+                            var target = event.target || event.cyTarget;
+                            cy.fit(target, 200);
+                        }
+                    }
+                ],
+                // css classes that menu items will have
+                menuItemClasses: [],
+                // css classes that context menu will have
+                contextMenuClasses: []
+            };
+            cy.contextMenus(options);
         }
         var lastSearch = '';
-        $('#reset').on('click', function () {
-            if (isDirty()) {
-                clear();
-            }
-            else {
-                allNodes.unselect();
-                hideNodeInfo();
-                cy.stop();
-                cy.animation({
-                    fit: {
-                        eles: cy.elements(),
-                        padding: layoutPadding
-                    },
-                    duration: aniDur,
-                    easing: easing
-                }).play();
-            }
-        });
-        $('#filters').on('click', 'input', function () {
-            var soft = $('#soft').is(':checked');
-            var semiSoft = $('#semi-soft').is(':checked');
-            var na = $('#na').is(':checked');
-            var semiHard = $('#semi-hard').is(':checked');
-            var hard = $('#hard').is(':checked');
-            var red = $('#red').is(':checked');
-            var white = $('#white').is(':checked');
-            var cider = $('#cider').is(':checked');
-            var england = $('#chs-en').is(':checked');
-            var france = $('#chs-fr').is(':checked');
-            var italy = $('#chs-it').is(':checked');
-            var usa = $('#chs-usa').is(':checked');
-            var spain = $('#chs-es').is(':checked');
-            var switzerland = $('#chs-ch').is(':checked');
-            var euro = $('#chs-euro').is(':checked');
-            var newWorld = $('#chs-nworld').is(':checked');
-            var naCountry = $('#chs-na').is(':checked');
-            cy.batch(function () {
-                allNodes.forEach(function (n) {
-                    var type = n.data('NodeType');
-                    n.removeClass('filtered');
-                    var filter = function () {
-                        n.addClass('filtered');
-                    };
-                    if (type === 'Cheese' || type === 'CheeseType') {
-                        var cType = n.data('Type');
-                        var cty = n.data('Country');
-                        if (
-                        // moisture
-                        (cType === 'Soft' && !soft)
-                            || (cType === 'Semi-soft' && !semiSoft)
-                            || (cType === undefined && !na)
-                            || (cType === 'Semi-hard' && !semiHard)
-                            || (cType === 'Hard' && !hard)
-                            // country
-                            || (cty === 'England' && !england)
-                            || (cty === 'France' && !france)
-                            || (cty === 'Italy' && !italy)
-                            || (cty === 'US' && !usa)
-                            || (cty === 'Spain' && !spain)
-                            || (cty === 'Switzerland' && !switzerland)
-                            || ((cty === 'Holland' || cty === 'Ireland' || cty === 'Portugal' || cty === 'Scotland' || cty === 'Wales') && !euro)
-                            || ((cty === 'Canada' || cty === 'Australia') && !newWorld)
-                            || (cty === undefined && !naCountry)) {
-                            filter();
-                        }
-                    }
-                    else if (type === 'RedWine') {
-                        if (!red) {
-                            filter();
-                        }
-                    }
-                    else if (type === 'WhiteWine') {
-                        if (!white) {
-                            filter();
-                        }
-                    }
-                    else if (type === 'Cider') {
-                        if (!cider) {
-                            filter();
-                        }
-                    }
-                });
-            });
-        });
     }
 })();
 //# sourceMappingURL=dashboard.component.js.map
