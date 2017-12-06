@@ -109,7 +109,7 @@
                 var levelCount = levelCounts[i] ? levelCounts[i] : 0;
                 s += levelCount;
                 if (s < 500)
-                    j = i + 1;
+                    j = i;
                 else
                     break;
             }
@@ -172,6 +172,7 @@
             drawUpwards(root, layoutType);
             drawNodesStartingAtRoot(root, layoutType, convertedData, maxExpandedLevel);
             cy.add(convertedData);
+            console.log(cy.nodes().length);
         };
         // when both graph export json and style loaded, init cy
         var refreshAll = function (layoutType) { return $q.all([graphP(), styleP]).then(function (data) {
