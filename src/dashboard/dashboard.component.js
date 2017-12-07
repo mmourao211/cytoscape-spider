@@ -16,6 +16,10 @@
         var aniDur = 500;
         var easing = 'linear';
         var cy, dataset, dict;
+        var maxExpandedLevel;
+        var currentLayout;
+        var levelCounters = [];
+        var maxLevel = 8;
         // get exported json from cytoscape desktop via ajax
         var graphP = function () { return $.ajax({
             url: '../../data/example.json?_=' + new Date().getTime(),
@@ -30,11 +34,11 @@
             type: 'GET',
             dataType: 'text'
         });
-        var drawNodesStartingAtRoot = function (root, layoutType, convertedData, maxExpandedLevel) {
-            if (cy.$id(root.name).length == 0) {
+        var drawNodesStartingAtRoot = function (root, convertedData) {
+            if (cy.$id(root.n).length == 0) {
                 var node = {
                     data: {
-                        id: root.name,
+                        id: root.n,
                         ancestors: root.ancestorList
                     },
                     position: null,
@@ -44,31 +48,33 @@
                 if (root.parentName)
                     convertedData.push({
                         data: {
-                            id: root.parentName + " to " + root.name,
+                            id: root.parentName + " to " + root.n,
                             source: root.parentName,
-                            target: root.name
+                            target: root.n
                         },
                         style: {
-                            width: layoutType == 'tree' ? 64 / Math.pow(root.level, 1.7) : 3 / root.level,
+                            width: currentLayout == 'tree' ? root.size / 2 : 3 / root.level,
                         }
                     });
-                if (layoutType == 'tree') {
+                if (currentLayout == 'tree') {
+                    var A = levelCounters[maxLevel] * Math.cos(Math.PI / 6);
+                    var X = A / (Math.pow(6, maxLevel - 1) - 1);
                     node.position = {
-                        y: 30 * root.y,
-                        x: 7000 * Math.log(root.level)
+                        y: root.y,
+                        x: Math.pow(6, maxLevel - root.level) * X * (Math.pow(6, root.level - 1) - 1)
                     };
                     node.style = {
                         'content': 'XLSX',
                         'text-valign': 'center',
                         'color': 'white',
-                        'font-size': (8 * Math.pow(root.size, 1.7)).toString() + 'px',
+                        'font-size': (root.size / 2).toString() + 'px',
                         'text-outline-color': '#888',
                         'background-color': '#888',
-                        width: 16 * Math.pow(root.size, 1.7),
-                        height: 16 * Math.pow(root.size, 1.7)
+                        width: root.size,
+                        height: root.size
                     };
                 }
-                else if (layoutType == 'fractal') {
+                else if (currentLayout == 'fractal') {
                     node.position = {
                         x: root.x,
                         y: root.y
@@ -85,22 +91,22 @@
                     };
                 }
             }
-            if (root.level == maxExpandedLevel && root.children.length) {
+            if (root.level == maxExpandedLevel && root.c.length) {
                 node.style.shape = 'rectangle';
                 node.style.content = '+' + root.count;
             }
-            else if (root.children.length)
-                for (var i = 0; i < root.children.length; i++) {
-                    drawNodesStartingAtRoot(root.children[i], layoutType, convertedData, maxExpandedLevel);
+            else if (root.c.length)
+                for (var i = 0; i < root.c.length; i++) {
+                    drawNodesStartingAtRoot(root.c[i], convertedData);
                 }
         };
         var populateLevelCounts = function (root, levelCounts) {
             if (!levelCounts[root.level])
                 levelCounts[root.level] = 0;
             levelCounts[root.level]++;
-            if (root.children.length)
-                for (var i = 0; i < root.children.length; i++)
-                    populateLevelCounts(root.children[i], levelCounts);
+            if (root.c.length)
+                for (var i = 0; i < root.c.length; i++)
+                    populateLevelCounts(root.c[i], levelCounts);
         };
         var getMaxExpandedLevel = function (levelCounts) {
             var s = 0;
@@ -115,36 +121,51 @@
             }
             return j;
         };
-        var drawUpwards = function (root, layoutType) {
+        var drawUpwards = function (root) {
             var convertedData = [];
+            var childName;
+            var childSize;
             while (root.parentName) {
                 root = dict[root.parentName];
                 var node = {
                     data: {
-                        id: root.name,
+                        id: root.n,
                         ancestors: root.ancestorList
                     },
                     position: null,
                     style: null
                 };
                 convertedData.push(node);
-                if (layoutType == 'tree') {
+                if (childName)
+                    convertedData.push({
+                        data: {
+                            id: root.n + " to " + childName,
+                            source: root.n,
+                            target: childName
+                        },
+                        style: {
+                            width: currentLayout == 'tree' ? childSize / 2 : 3 / root.level,
+                        }
+                    });
+                if (currentLayout == 'tree') {
+                    var A = levelCounters[maxLevel] * Math.cos(Math.PI / 6);
+                    var X = A / (Math.pow(6, maxLevel - 1) - 1);
                     node.position = {
-                        y: 30 * root.y,
-                        x: 7000 * Math.log(root.level)
+                        y: root.y,
+                        x: Math.pow(6, maxLevel - root.level) * X * (Math.pow(6, root.level - 1) - 1)
                     };
                     node.style = {
                         'content': 'XLSX',
                         'text-valign': 'center',
                         'color': 'white',
-                        'font-size': (8 * Math.pow(root.size, 1.7)).toString() + 'px',
+                        'font-size': (root.size / 2).toString() + 'px',
                         'text-outline-color': '#888',
                         'background-color': '#888',
-                        width: 16 * Math.pow(root.size, 1.7),
-                        height: 16 * Math.pow(root.size, 1.7)
+                        width: root.size,
+                        height: root.size
                     };
                 }
-                else if (layoutType == 'fractal') {
+                else if (currentLayout == 'fractal') {
                     node.position = {
                         x: root.x,
                         y: root.y
@@ -160,25 +181,28 @@
                         height: 16 * Math.pow(maxLevel - root.level + 1, 1.7),
                     };
                 }
+                childName = root.n;
+                childSize = root.size;
             }
             cy.add(convertedData);
         };
-        var drawNodes = function (id, layoutType) {
+        var drawNodes = function (id) {
             var root = dict[id];
             var convertedData = [];
             var levelCounts = [];
             populateLevelCounts(root, levelCounts);
-            var maxExpandedLevel = getMaxExpandedLevel(levelCounts);
-            drawUpwards(root, layoutType);
-            drawNodesStartingAtRoot(root, layoutType, convertedData, maxExpandedLevel);
+            maxExpandedLevel = getMaxExpandedLevel(levelCounts);
+            drawUpwards(root);
+            console.log(levelCounters[maxLevel]);
+            drawNodesStartingAtRoot(root, convertedData);
             cy.add(convertedData);
-            console.log(cy.nodes().length);
         };
         // when both graph export json and style loaded, init cy
         var refreshAll = function (layoutType) { return $q.all([graphP(), styleP]).then(function (data) {
-            initCy(data, layoutType);
-            drawNodes(dataset.name, layoutType);
-            cy.fit(cy.$id(dataset.name), 200);
+            currentLayout = layoutType;
+            initCy(data);
+            drawNodes(dataset.n);
+            cy.fit(cy.$id(dataset.n), 200);
         }); };
         var allNodes = null;
         var allEles = null;
@@ -335,20 +359,18 @@
         function hideNodeInfo() {
             $('#info').hide();
         }
-        var levelCounters = [];
-        var maxLevel = 8;
         var getFractalPosition = function (self, R, oldTheta) {
-            if (!self.children.length)
+            if (!self.c.length)
                 return;
             if (!R)
                 R = 5000;
             if (!oldTheta)
                 oldTheta = Math.PI;
-            var n = self.children.length;
+            var n = self.c.length;
             var theta = 2 * Math.PI / n;
             var newR = R * Math.sin(6 * oldTheta / 20);
             for (var k = 0; k < n; k++) {
-                var child = self.children[k];
+                var child = self.c[k];
                 child.x = self.x + newR * Math.cos(theta * k);
                 child.y = self.y + newR * Math.sin(theta * k);
                 getFractalPosition(child, newR, theta);
@@ -357,15 +379,15 @@
         var getY = function (self, level, levelCounters) {
             if (!levelCounters[level])
                 levelCounters[level] = 0;
-            self.size = 12 * (1 - level / (maxLevel + 1));
-            var children = self.children;
+            var children = self.c;
+            self.size = 10 * Math.pow(6, maxLevel - level);
             if (!children.length) {
                 for (var i = level; i < maxLevel + 1; i++) {
                     if (!levelCounters[i])
                         levelCounters[i] = 0;
-                    levelCounters[i] += 1;
+                    levelCounters[i] += 2 * self.size;
                 }
-                self.y = levelCounters[level];
+                self.y = levelCounters[level] - self.size / 2;
                 return self.y;
             }
             else {
@@ -375,55 +397,55 @@
                     if (!child.y)
                         child.y = getY(child, level + 1, levelCounters);
                     if (j == 0)
-                        first = child.y;
+                        first = child;
                     if (j == children.length - 1)
-                        last = child.y;
+                        last = child;
                 }
-                levelCounters[level] = last;
-                return (first + last) / 2;
+                levelCounters[level] = last.y + self.size;
+                return (first.y + last.y) / 2;
             }
         };
         var getChildrenCount = function (parent) {
             if (!parent.count)
-                parent.count = _.sumBy(parent.children, function (child) { return getChildrenCount(child); }) + 1;
+                parent.count = _.sumBy(parent.c, function (child) { return getChildrenCount(child); }) + 1;
             return parent.count;
         };
-        var createCyData = function (root, parentName, level, layoutType, ancestorList) {
+        var createCyData = function (root, parentName, level, ancestorList) {
             if (!level)
                 level = 1;
-            dict[root.name] = root;
+            dict[root.n] = root;
             root.count = getChildrenCount(root);
             root.level = level;
             root.ancestorList = ancestorList;
             root.parentName = parentName;
-            _.each(root.children, function (child) { return createCyData(child, root.name, level + 1, layoutType, ancestorList + (" -" + root.name + "- ")); });
-            if (layoutType == 'tree') {
+            _.each(root.c, function (child) { return createCyData(child, root.n, level + 1, ancestorList + (" -" + root.n + "- ")); });
+            if (currentLayout == 'tree') {
                 root.x = root.x ? root.x : 7000 * Math.log(level);
                 root.y = root.y ? root.y : getY(root, level, levelCounters);
             }
-            else if (layoutType == 'fractal') {
+            else if (currentLayout == 'fractal') {
             }
         };
         vm.draw = function (layoutType) {
             refreshAll(layoutType);
         };
-        function initCy(then, layoutType) {
+        function initCy(then) {
             var loading = document.getElementById('loading');
             dataset = then[0];
             var styleJson = then[1];
             var elements = [];
-            if (!layoutType)
-                layoutType = 'fractal';
-            if (layoutType == 'fractal') {
+            if (!currentLayout)
+                currentLayout = 'fractal';
+            if (currentLayout == 'fractal') {
                 dataset.x = 0;
                 dataset.y = 0;
                 getFractalPosition(dataset, 0);
             }
-            else if (layoutType == 'tree') {
+            else if (currentLayout == 'tree') {
                 levelCounters = [];
             }
             dict = {};
-            createCyData(dataset, null, null, layoutType, '');
+            createCyData(dataset, null, null, '');
             cy = window.cy = cytoscape({
                 container: $element.find('.container')[0],
                 layout: {
@@ -461,6 +483,20 @@
                         }
                     },
                     {
+                        id: 'expand',
+                        content: 'Expand',
+                        tooltipText: 'Expand',
+                        selector: 'node',
+                        onClickFunction: function (event) {
+                            var target = event.target || event.cyTarget;
+                            var toAdd = [];
+                            drawNodesStartingAtRoot(dict[target.id()], toAdd);
+                            cy.add(toAdd);
+                            target.style('shape', 'ellipse');
+                            target.style('content', 'XLSX');
+                        }
+                    },
+                    {
                         id: 'start-from',
                         content: 'Start from here',
                         tooltipText: 'Start from here',
@@ -469,7 +505,7 @@
                             var target = event.target || event.cyTarget;
                             var id = target.id();
                             cy.remove(cy.nodes());
-                            drawNodes(id, layoutType);
+                            drawNodes(id);
                         }
                     },
                     {
