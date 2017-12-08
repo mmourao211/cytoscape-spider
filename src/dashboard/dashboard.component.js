@@ -37,10 +37,10 @@
             type: 'GET',
             dataType: 'text'
         });
-        var drawNodesStartingAtRoot = function (root, convertedData) {
+        var drawNodesStartingAtRoot = function (root, convertedData, ommitStartingEdge) {
             var nodeAlreadyExists = cy.$id(root.n).length != 0;
             if (!nodeAlreadyExists) {
-                var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName, 'child');
+                var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName, 'child', undefined, undefined, undefined, ommitStartingEdge);
                 if (root.level == maxExpandedLevel && root.c.length) {
                     nodeToAdd.style.shape = 'rectangle';
                     nodeToAdd.style.content = '+' + root.count;
@@ -48,7 +48,7 @@
             }
             if (root.level != maxExpandedLevel && root.c.length)
                 for (var i = 0; i < root.c.length; i++) {
-                    drawNodesStartingAtRoot(root.c[i], convertedData);
+                    drawNodesStartingAtRoot(root.c[i], convertedData, false);
                 }
         };
         var populateLevelCounts = function (root) {
@@ -74,14 +74,14 @@
         };
         var drawUpwards = function (root) {
             var first = root;
-            var A = sizeCounters[maxExpandedLevel] / 5;
             var convertedData = [];
             var childName;
-            var x = -A;
             var initialSize = getSize(root);
+            var A = Math.max(sizeCounters[maxExpandedLevel] / 5, 2 * initialSize);
+            var x = -A;
             while (root.parentName) {
                 root = dict[root.parentName];
-                addCyDataToQueue(convertedData, childName, root.n, 'parent', first.y, x, initialSize);
+                addCyDataToQueue(convertedData, childName, root.n, 'parent', first.y, x, initialSize, true);
                 x -= A;
                 childName = root.n;
             }
@@ -98,7 +98,7 @@
             maxExpandedLevel = getMaxExpandedLevel();
             getY(root);
             drawUpwards(root);
-            drawNodesStartingAtRoot(root, convertedData);
+            drawNodesStartingAtRoot(root, convertedData, true);
             cy.add(convertedData);
             cy.fit(cy.nodes());
         };
@@ -149,7 +149,7 @@
             }
             return self.y;
         };
-        var addCyDataToQueue = function (convertedData, childName, parentName, whatToAdd, y, x, size) {
+        var addCyDataToQueue = function (convertedData, childName, parentName, whatToAdd, y, x, size, ommitEdge) {
             var child = dict[childName];
             var parent = dict[parentName];
             var datasetNode = whatToAdd == 'parent' ? parent : child;
@@ -162,18 +162,33 @@
                 position: null,
                 style: null
             };
+            if (datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel)
+                cyNode.data.expandable = true;
             convertedData.push(cyNode);
-            if (whatToAdd == 'child' && parent && child && !edgeExists(parentName, childName))
-                convertedData.push({
+            if (parent && child && !edgeExists(parentName, childName)) {
+                var edge = {
                     data: {
                         id: getEdgeId(parentName, childName),
                         source: parent.n,
                         target: child.n
                     },
                     style: {
-                        width: getSize(child) / 4
+                        width: ommitEdge ? 10 : getSize(child) / 4,
+                        'line-color': ommitEdge ? '#ccc' : '#888',
+                        'curve-style': 'bezier'
                     }
-                });
+                };
+                convertedData.push(edge);
+                if (ommitEdge) {
+                    edge.style['mid-target-arrow-color'] = '#ccc';
+                    edge.style['mid-target-arrow-shape'] = 'triangle';
+                    edge.style['arrow-scale'] = 100;
+                }
+                else {
+                    edge.style['mid-target-arrow-shape'] = 'triangle';
+                    edge.style['arrow-scale'] = 2;
+                }
+            }
             if (currentLayout == 'tree') {
                 var base = 1.1;
                 var A = sizeCounters[maxExpandedLevel] / 5;
@@ -184,14 +199,13 @@
                     x: y !== undefined ? y : datasetNode.y,
                     y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
                 };
-                console.log(cyNode.position.x);
                 cyNode.style = {
                     'content': 'XLSX',
                     'text-valign': 'center',
                     'color': 'white',
                     'font-size': (size / 3).toString() + 'px',
-                    'text-outline-color': '#888',
-                    'background-color': '#888',
+                    'text-outline-color': whatToAdd == 'parent' ? '#ccc' : '#888',
+                    'background-color': whatToAdd == 'parent' ? '#ccc' : '#888',
                     width: size,
                     height: size
                 };
@@ -446,7 +460,7 @@
                         id: 'collapse',
                         content: 'Collapse',
                         tooltipText: 'Collapse',
-                        selector: 'node',
+                        selector: 'node[expandable]',
                         onClickFunction: function (event) {
                             var target = event.target || event.cyTarget;
                             cy.remove(cy.$("[ancestors *= \"-" + target.id() + "-\"]"));
@@ -458,11 +472,11 @@
                         id: 'expand',
                         content: 'Expand',
                         tooltipText: 'Expand',
-                        selector: 'node',
+                        selector: 'node[expandable]',
                         onClickFunction: function (event) {
                             var target = event.target || event.cyTarget;
                             var toAdd = [];
-                            drawNodesStartingAtRoot(dict[target.id()], toAdd);
+                            drawNodesStartingAtRoot(dict[target.id()], toAdd, false);
                             cy.add(toAdd);
                             target.style('shape', 'ellipse');
                             target.style('content', 'XLSX');
