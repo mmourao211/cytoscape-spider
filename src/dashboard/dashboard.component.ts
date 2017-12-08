@@ -193,15 +193,15 @@
         var newLevel = datasetNode.level - startingLevel + 1;
         var X = A / (Math.pow(base, newMaxExpandedLevel - 1) - 1);
         cyNode.position = {
-          y: y !== undefined ? y : datasetNode.y,
-          x: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel)* X * (Math.pow(base,newLevel-1)-1)
+          x: y !== undefined ? y : datasetNode.y,
+          y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel)* X * (Math.pow(base,newLevel-1)-1)
         };
         console.log(cyNode.position.x)
         cyNode.style = {
           'content': 'XLSX',
           'text-valign': 'center',
           'color': 'white',
-          'font-size': (size / 2).toString() + 'px',
+          'font-size': (size / 3).toString() + 'px',
           'text-outline-color': '#888',
           'background-color': '#888',
           width: size,
