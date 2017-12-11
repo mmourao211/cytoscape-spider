@@ -100,6 +100,11 @@
             drawUpwards(root);
             drawNodesStartingAtRoot(root, convertedData, true);
             cy.add(convertedData);
+            if (currentLayout == 'fractal')
+                cy.layout({
+                    name: 'cose',
+                    randomize: true
+                }).run();
             cy.fit(cy.nodes());
         };
         // when both graph export json and style loaded, init cy
@@ -107,7 +112,6 @@
             currentLayout = layoutType;
             initCy(data);
             drawNodes(dataset.n);
-            // cy.fit(cy.$id(dataset.n), 200);
         }); };
         var allNodes = null;
         var allEles = null;
@@ -173,23 +177,39 @@
                         target: child.n
                     },
                     style: {
-                        width: ommitEdge ? 10 : getSize(child) / 4,
                         'line-color': ommitEdge ? '#ccc' : '#888',
                         'curve-style': 'bezier'
                     }
                 };
-                convertedData.push(edge);
                 if (ommitEdge) {
                     edge.style['mid-target-arrow-color'] = '#ccc';
                     edge.style['mid-target-arrow-shape'] = 'triangle';
-                    edge.style['arrow-scale'] = 100;
                 }
                 else {
                     edge.style['mid-target-arrow-shape'] = 'triangle';
-                    edge.style['arrow-scale'] = 2;
                 }
+                if (currentLayout == 'tree') {
+                    edge.style['width'] = ommitEdge ? 10 : getSize(child) / 4;
+                    if (ommitEdge) {
+                        edge.style['arrow-scale'] = 100;
+                    }
+                    else {
+                        edge.style['arrow-scale'] = 2;
+                    }
+                }
+                convertedData.push(edge);
             }
+            cyNode.style = {
+                'content': 'XLSX',
+                'text-valign': 'center',
+                'color': 'white',
+                'text-outline-color': whatToAdd == 'parent' ? '#ccc' : '#888',
+                'background-color': whatToAdd == 'parent' ? '#ccc' : '#888',
+            };
             if (currentLayout == 'tree') {
+                cyNode.style['font-size'] = (size / 3).toString() + 'px';
+                cyNode.style['width'] = size;
+                cyNode.style['height'] = size;
                 var base = 1.1;
                 var A = sizeCounters[maxExpandedLevel] / 5;
                 var newMaxExpandedLevel = maxExpandedLevel - startingLevel + 1;
@@ -198,32 +218,6 @@
                 cyNode.position = {
                     x: y !== undefined ? y : datasetNode.y,
                     y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
-                };
-                cyNode.style = {
-                    'content': 'XLSX',
-                    'text-valign': 'center',
-                    'color': 'white',
-                    'font-size': (size / 3).toString() + 'px',
-                    'text-outline-color': whatToAdd == 'parent' ? '#ccc' : '#888',
-                    'background-color': whatToAdd == 'parent' ? '#ccc' : '#888',
-                    width: size,
-                    height: size
-                };
-            }
-            else if (currentLayout == 'fractal') {
-                cyNode.position = {
-                    x: datasetNode.x,
-                    y: datasetNode.y
-                };
-                cyNode.style = {
-                    'content': 'XLSX',
-                    'text-valign': 'center',
-                    'color': 'white',
-                    'font-size': (8 * Math.pow(maxLevel - datasetNode.level + 1, 1.7)).toString() + 'px',
-                    'text-outline-color': '#888',
-                    'background-color': '#888',
-                    width: 16 * Math.pow(maxLevel - datasetNode.level + 1, 1.7),
-                    height: 16 * Math.pow(maxLevel - datasetNode.level + 1, 1.7),
                 };
             }
             return cyNode;
