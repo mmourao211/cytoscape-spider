@@ -15,15 +15,11 @@
 
   function DashboardController($element: JQuery, $q: angular.IQService, $timeout: angular.ITimeoutService) {
     const vm = this;
-    var layoutPadding = 50;
-    var aniDur = 500;
-    var easing = 'linear';
     var cy, dataset, dict;
     var maxExpandedLevel;
     var currentLayout;
     var levelCounters = [];
     var sizeCounters = [];
-    var maxLevel = 8;
     var totalCount = 0;
     var startingLevel = 1;
   
@@ -126,10 +122,6 @@
       drawNodes(dataset.n);
     });
   
-    var allNodes = null;
-    var allEles = null;
-    var lastHighlighted = null;
-    var lastUnhighlighted = null;
     var getEdgeId = (parentName, childName) => `${parentName} to ${childName}`
     var edgeExists = (parentName, childName) => !!cy.$id(getEdgeId(parentName, childName)).length
 
@@ -237,210 +229,7 @@
       }
       return cyNode;
     }
-    
-    function getFadePromise( ele, opacity ){
-      return ele.animation({
-        style: { 'opacity': opacity },
-        duration: aniDur
-      }).play().promise();
-    };
-    
-    var restoreElesPositions = function( nhood ){
-      return $q.all( nhood.map(function( ele ){
-        var p = ele.data('orgPos');
-  
-        return ele.animation({
-          position: { x: p.x, y: p.y },
-          duration: aniDur,
-          easing: easing
-        }).play().promise();
-      }) );
-    };
-  
-    function highlight( node ){
-      var oldNhood = lastHighlighted;
-  
-      var nhood = lastHighlighted = node.closedNeighborhood();
-      var others = lastUnhighlighted = cy.elements().not( nhood );
-  
-      var reset = function(){
-        cy.batch(function(){
-          others.addClass('hidden');
-          nhood.removeClass('hidden');
-  
-          allEles.removeClass('faded highlighted');
-  
-          nhood.addClass('highlighted');
-  
-          others.nodes().forEach(function(n){
-            var p = n.data('orgPos');
-  
-            n.position({ x: p.x, y: p.y });
-          });
-        });
-  
-        return $q.resolve().then(function(){
-          if( isDirty() ){
-            return fit();
-          } else {
-            return $q.resolve();
-          };
-        }).then(function(){
-            return delay(aniDur);
-        });
-      };
-  
-      var runLayout = function(){
-        var p = node.data('orgPos');
-  
-        var l = nhood.filter(':visible').makeLayout({
-          name: 'concentric',
-          fit: false,
-          animate: true,
-          animationDuration: aniDur,
-          animationEasing: easing,
-          boundingBox: {
-            x1: p.x - 1,
-            x2: p.x + 1,
-            y1: p.y - 1,
-            y2: p.y + 1
-          },
-          avoidOverlap: true,
-          concentric: function( ele ){
-            if( ele.same( node ) ){
-              return 2;
-            } else {
-              return 1;
-            }
-          },
-          levelWidth: function(){ return 1; },
-          padding: layoutPadding
-        });
-  
-        var promise = cy.promiseOn('layoutstop');
-  
-        l.run();
-  
-        return promise;
-      };
-  
-      var fit = function(){
-        return cy.animation({
-          fit: {
-            eles: nhood.filter(':visible'),
-            padding: layoutPadding
-          },
-          easing: easing,
-          duration: aniDur
-        }).play().promise();
-      };
-  
-      var showOthersFaded = function(){
-        return delay( 250 ).then(function(){
-          cy.batch(function(){
-            others.removeClass('hidden').addClass('faded');
-          });
-        });
-      };
-  
-      return $q.when()
-        .then( reset )
-        .then( runLayout )
-        .then( fit )
-        .then( showOthersFaded )
-      ;
-  
-    }
-  
-      function delay(duration: number):angular.IPromise<any> {
-          var deferred = $q.defer();
-          $timeout(() => deferred.resolve(), duration);
-          return deferred.promise;
-      }
-
-    function isDirty(){
-      return lastHighlighted != null;
-    }
-  
-    function clear( opts? ){
-      if( !isDirty() ){ return $q.when(); }
-  
-      opts = $.extend({
-  
-      }, opts);
-  
-      cy.stop();
-      allNodes.stop();
-  
-      var nhood = lastHighlighted;
-      var others = lastUnhighlighted;
-  
-      lastHighlighted = lastUnhighlighted = null;
-  
-      var hideOthers = function(){
-        return delay( 125 ).then(function(){
-          others.addClass('hidden');
-  
-          return delay( 125 );
-        });
-      };
-  
-      var showOthers = function(){
-        cy.batch(function(){
-          allEles.removeClass('hidden').removeClass('faded');
-        });
-  
-        return delay( aniDur );
-      };
-  
-      var restorePositions = function(){
-        cy.batch(function(){
-          others.nodes().forEach(function( n ){
-            var p = n.data('orgPos');
-  
-            n.position({ x: p.x, y: p.y });
-          });
-        });
-  
-        return restoreElesPositions( nhood.nodes() );
-      };
-  
-      var resetHighlight = function(){
-        nhood.removeClass('highlighted');
-      };
-  
-      return $q.when()
-        .then( resetHighlight )
-        .then( hideOthers )
-        .then( restorePositions )
-        .then( showOthers )
-      ;
-    }
-  
-    // function showNodeInfo( node ){
-    //   $('#info').html( infoTemplate( node.data() ) ).show();
-    // }
-  
-    function hideNodeInfo(){
-      $('#info').hide();
-    }
-    
-
-    var getFractalPosition = (self, R, oldTheta?) => {
-      if(!self.c.length)
-        return;
-      if(!R) R = 5000;
-      if(!oldTheta) oldTheta = Math.PI;
-      var n = self.c.length;
-      var theta = 2*Math.PI/n;
-      var newR = R*Math.sin(6*oldTheta/20);
-      for(var k = 0; k< n;k++){
-        var child = self.c[k];
-        child.x = self.x + newR*Math.cos(theta*k);
-        child.y = self.y + newR*Math.sin(theta*k);
-        getFractalPosition(child, newR, theta);
-      }
-    }
+            
     var getChildrenCount = (parent) => {
       if(!parent.count)
         parent.count = _.sumBy(parent.c, (child:any) => getChildrenCount(child)) + 1;
@@ -464,20 +253,11 @@
       refreshAll(layoutType)
     } 
 
-    function initCy( then){
+    function initCy(then){
       var loading = document.getElementById('loading');
       dataset = then[0];
       var styleJson = then[1];
       var elements = [];
-      if(!currentLayout) currentLayout = 'fractal';
-      if(currentLayout == 'fractal'){
-        dataset.x = 0;
-        dataset.y = 0;
-        getFractalPosition(dataset, 0);
-      }
-      else if(currentLayout == 'tree'){
-        levelCounters = [];
-      }
       dict = {};
       createCyData(dataset, null, null, '');
   
@@ -486,7 +266,7 @@
         layout: { 
           name: 'preset',
           boundingBox: {x1: 0 ,y1: 0,x2: 1000000,y2: 100000}
-        } as any,
+        },
         motionBlur: true,
         selectionType: 'single',
         boxSelectionEnabled: false,
@@ -565,8 +345,6 @@
       };
       cy.contextMenus(options);
     }
-  
-    var lastSearch = '';
   
   }
 })();
