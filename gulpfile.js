@@ -40,7 +40,12 @@ gulp.task('copy', () => {
     'node_modules/cytoscape-dagre/cytoscape-dagre.js',
     'node_modules/cytoscape-expand-collapse/cytoscape-expand-collapse.js',
     'node_modules/cytoscape-context-menus/cytoscape-context-menus.js',
-    'node_modules/cytoscape-context-menus/cytoscape-context-menus.css'
+    'node_modules/cytoscape-context-menus/cytoscape-context-menus.css',
+    'node_modules/sigma/build/sigma.min.js',
+    'node_modules/sigma/build/plugins/sigma.layout.forceAtlas2.min.js',
+    'node_modules/sigma/build/plugins/sigma.plugins.dragNodes.min.js',
+    'node_modules/sigma/build/plugins/sigma.plugins.animate.min.js',
+    'node_modules/sigma/build/plugins/sigma.layout.noverlap.min.js'
   ])
   .pipe(gulp.dest('dist/vendor'));
     gulp.src([

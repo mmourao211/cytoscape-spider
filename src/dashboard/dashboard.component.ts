@@ -13,11 +13,19 @@
 
   DashboardController.$inject = ['$element', '$q', '$timeout'];
 
+  enum Library{
+    Sigma,
+    Cytoscape
+  }
+
   function DashboardController($element: JQuery, $q: angular.IQService, $timeout: angular.ITimeoutService) {
     const vm = this;
-    var cy, dataset, dict;
+    vm.library = Library.Sigma;
+    vm.currentLayout = 'tree';
+    vm.libraries = Library;
+    vm.maxNodes = 500;
+    var cy, dataset, dict,s;
     var maxExpandedLevel;
-    var currentLayout;
     var levelCounters = [];
     var sizeCounters = [];
     var totalCount = 0;
@@ -39,9 +47,10 @@
       dataType: 'text'
     });
   
+    var doesNodeAlreadyExist = (id) => vm.library == Library.Cytoscape ? cy.$id(id).length != 0 : !!s.graph.nodes(id);
   
     var drawNodesStartingAtRoot = (root, convertedData, ommitStartingEdge) => {
-      var nodeAlreadyExists = cy.$id(root.n).length != 0;
+      var nodeAlreadyExists = doesNodeAlreadyExist(root.n);
       if(!nodeAlreadyExists){
         var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName,'child', undefined, undefined, undefined, ommitStartingEdge)
         if(root.level == maxExpandedLevel && root.c.length){
@@ -71,7 +80,7 @@
       for(var i = 0; i < levelCounters.length; i++){
         var levelCount = levelCounters[i] ? levelCounters[i] : 0;
         s += levelCount;
-        if(s < 500)
+        if(s < vm.maxNodes)
           j = i;
         else
           break; 
@@ -81,7 +90,7 @@
 
     var drawUpwards = (root) => {
       var first = root;
-      var convertedData = [];
+      var convertedData = vm.library == Library.Cytoscape ?  [] : {nodes: [], edges: []};
       var childName;
       var initialSize = getSize(root);
       var A = Math.max(sizeCounters[maxExpandedLevel]/5, 2*initialSize);
@@ -93,11 +102,35 @@
         x -= A;
         childName = root.n;
       }
-      cy.add(convertedData);
+      if(vm.library == Library.Cytoscape)
+        cy.add(convertedData);
+      else{
+        s.graph.read(convertedData)
+        s.refresh()
+      }
     }
+    vm.stop = () => {
+      s.stopForceAtlas2();    
+      vm.started = false;
+    }
+    vm.start = () => {
+      vm.started = true;
+      s.startForceAtlas2({
+        gravity: 1,
+        scalingRatio: 1,
+        strongGravityMode: false,
+        linLogMode: false,
+        outboundAttractionDistribution: false,
+        adjustSizes: false,
+        edgeWeightInfluence: 0.1,
+        iterationsPerRender: 10,
+        startingIterations: 10
+      })
+    }
+
     var drawNodes = (id) => {
       var root = dict[id];
-      var convertedData = [];
+      var convertedData = vm.library == Library.Cytoscape ? [] : {nodes: [], edges: []};
       levelCounters = [];
       sizeCounters = [];
       totalCount = 0;
@@ -107,25 +140,34 @@
       getY(root);
       drawUpwards(root)
       drawNodesStartingAtRoot(root, convertedData, true)
-      cy.add(convertedData);
-      if(currentLayout == 'fractal')
-        cy.layout({
-          name: 'cose', 
-          randomize: true
-        }).run();
-      cy.fit(cy.nodes());
+      if(vm.library == Library.Cytoscape)
+        cy.add(convertedData);
+      else{
+        s.graph.read(convertedData)
+        if(vm.currentLayout == 'fractal'){
+          vm.start();
+        }
+        s.refresh();
+      }
+      if(vm.currentLayout == 'fractal')
+        if(vm.library == Library.Cytoscape)
+          cy.layout({
+            name: 'cose', 
+            randomize: true
+          }).run();
+      if(vm.library == Library.Cytoscape)
+        cy.fit(cy.nodes());
     }
     // when both graph export json and style loaded, init cy
-    var refreshAll = (layoutType: string) => $q.all([ graphP(), styleP ]).then(data => {
-      currentLayout = layoutType;
+    var refreshAll = () => $q.all([ graphP(), styleP ]).then(data => {
       initCy(data);
       drawNodes(dataset.n);
     });
   
     var getEdgeId = (parentName, childName) => `${parentName} to ${childName}`
-    var edgeExists = (parentName, childName) => !!cy.$id(getEdgeId(parentName, childName)).length
+    var edgeExists = (parentName, childName) => vm.library == Library.Cytoscape ? !!cy.$id(getEdgeId(parentName, childName)).length : !!s.graph.edges(getEdgeId(parentName, childName))
 
-    var getSize = (node) => 10000 * node.level * Math.sqrt(node.count / (2*Math.PI*totalCount));
+    var getSize = (node) => (vm.library == Library.Cytoscape ?  10000 : 100) * Math.sqrt(node.count / (2*Math.PI*totalCount));
     
 
     var getY = (self) => {
@@ -157,7 +199,7 @@
       }
       return self.y;
     }
-    var addCyDataToQueue = (convertedData: any[], childName, parentName, whatToAdd, y?, x?, size?, ommitEdge?) => {
+    var addCyDataToQueue = (convertedData, childName, parentName, whatToAdd, y?, x?, size?, ommitEdge?) => {
       var child = dict[childName];
       var parent = dict[parentName];
       var datasetNode = whatToAdd == 'parent' ? parent : child;
@@ -172,13 +214,18 @@
       };
       if(datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel ) 
         (cyNode.data as any).expandable = true;
-      convertedData.push(cyNode);
+      if(vm.library == Library.Cytoscape)
+        convertedData.push(cyNode);
+      else
+        convertedData.nodes.push(cyNode.data);
       if (parent && child && !edgeExists(parentName, childName)){
         var edge = {
           data: {
             id: getEdgeId(parentName, childName),
             source: parent.n,
-            target: child.n
+            target: child.n,
+            size: ommitEdge ? 10 : getSize(child) / 4,
+            weight: ommitEdge ? 10 : getSize(child) / 4
           },
           style: {
             'line-color': ommitEdge ? '#ccc' : '#888',
@@ -193,7 +240,7 @@
           edge.style['mid-target-arrow-shape'] = 'triangle';
           
         }
-        if (currentLayout == 'tree') {
+        if (vm.currentLayout == 'tree') {
           edge.style['width'] = ommitEdge ? 10 : getSize(child) / 4;
           if(ommitEdge){
             edge.style['arrow-scale'] = 100;
@@ -203,7 +250,10 @@
             
           }
         }
-        convertedData.push(edge);
+        if(vm.library == Library.Cytoscape)
+          convertedData.push(edge);
+        else
+          convertedData.edges.push(edge.data);
 
       }
       cyNode.style = {
@@ -213,10 +263,13 @@
         'text-outline-color': whatToAdd == 'parent' ? '#ccc' :'#888',
         'background-color': whatToAdd == 'parent' ? '#ccc' :'#888',
       };
-      if (currentLayout == 'tree') {
-        cyNode.style['font-size'] = (size / 3).toString() + 'px';
-        cyNode.style['width'] = size;
-        cyNode.style['height'] = size;
+      cyNode.style['font-size'] = (size / 3).toString() + 'px';
+      cyNode.style['width'] = size;
+      cyNode.style['height'] = size;
+      cyNode.data['size'] = size;
+      cyNode.data['mass'] = size;
+      cyNode.data['label'] = cyNode.style['content'];
+      if (vm.currentLayout == 'tree') {
         var base = 1.1;
         var A = sizeCounters[maxExpandedLevel]/5 ;
         var newMaxExpandedLevel = maxExpandedLevel - startingLevel + 1;
@@ -227,6 +280,10 @@
           y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel)* X * (Math.pow(base,newLevel-1)-1)
         };
       }
+      if(vm.library == Library.Sigma){
+        (cyNode.data as any).x = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
+        (cyNode.data as any).y = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
+      }
       return cyNode;
     }
             
@@ -235,7 +292,7 @@
         parent.count = _.sumBy(parent.c, (child:any) => getChildrenCount(child)) + 1;
       return parent.count;
     }
-    var createCyData = (root,  parentName?: string, level?: number, ancestorList?:string) => {
+    var createLibraryData = (root,  parentName?: string, level?: number, ancestorList?:string) => {
       if(!level)
         level = 1;
       dict[root.n] = root;
@@ -245,106 +302,133 @@
       root.ancestorList = ancestorList;
       root.parentName = parentName;
 
-      _.each(root.c,(child) => createCyData(child, root.n, level + 1, ancestorList + ` -${root.n}- `))
+      _.each(root.c,(child) => createLibraryData(child, root.n, level + 1, ancestorList + ` -${root.n}- `))
 
     }
 
-    vm.draw = (layoutType: string) => {
-      refreshAll(layoutType)
+    vm.draw = () => {
+      refreshAll()
     } 
 
     function initCy(then){
-      var loading = document.getElementById('loading');
       dataset = then[0];
       var styleJson = then[1];
-      var elements = [];
       dict = {};
-      createCyData(dataset, null, null, '');
-  
-      cy = (window as any).cy = cytoscape({
-        container: $element.find('.container')[0],
-        layout: { 
-          name: 'preset',
-          boundingBox: {x1: 0 ,y1: 0,x2: 1000000,y2: 100000}
-        },
-        motionBlur: true,
-        selectionType: 'single',
-        boxSelectionEnabled: false,
-        hideEdgesOnViewport: true,
-        style: (cytoscape as any).stylesheet()
-        .selector('node')
-          .css({
-            'text-valign': 'center',
-            'color': 'white',
-            'text-outline-width': 2,
-            'text-outline-color': '#888',
-            'background-color': '#888'
-          })
-      });
-      
-      var options = {
-        // List of initial menu items
-        menuItems: [
-          {
-            id: 'collapse', // ID of menu item
-            content: 'Collapse', // Display content of menu item
-            tooltipText: 'Collapse', // Tooltip text for menu item
-            selector: 'node[expandable]', 
-            onClickFunction: function (event) { // The function to be executed on click
-              var target = event.target || event.cyTarget;
-              cy.remove(cy.$(`[ancestors *= "-${target.id()}-"]`))
-              target.style('shape', 'rectangle')
-              target.style('content', '+' + getChildrenCount(dict[target.id()]));
-            }
+      createLibraryData(dataset, null, null, '');
+      killAll();
+      var element = $element.find('.container')[0]
+      if(vm.library == Library.Cytoscape)
+        cy = (window as any).cy = cytoscape({
+          container: element,
+          layout: { 
+            name: 'preset',
+            boundingBox: {x1: 0 ,y1: 0,x2: 1000000,y2: 100000}
           },
-          {
-            id: 'expand', // ID of menu item
-            content: 'Expand', // Display content of menu item
-            tooltipText: 'Expand', // Tooltip text for menu item
-            selector: 'node[expandable]', 
-            onClickFunction: function (event) { // The function to be executed on click
-              var target = event.target || event.cyTarget;
-              var toAdd = [];
-              drawNodesStartingAtRoot(dict[target.id()], toAdd, false);
-              cy.add(toAdd);
-              target.style('shape', 'ellipse')
-              target.style('content', 'XLSX');
+          motionBlur: true,
+          selectionType: 'single',
+          boxSelectionEnabled: false,
+          hideEdgesOnViewport: true,
+          style: (cytoscape as any).stylesheet()
+          .selector('node')
+            .css({
+              'text-valign': 'center',
+              'color': 'white',
+              'text-outline-width': 2,
+              'text-outline-color': '#888',
+              'background-color': '#888'
+            })
+        });
+      if(vm.library == Library.Sigma){
+        s = new sigma(element)
+        sigma.plugins.dragNodes(s, s.renderers[0]);
+        s.settings({
+                        hideEdgesOnMove: true,
+                        minNodeSize:0,
+                        maxNodeSize:0,
+                        minEdgeSize:0,
+                        maxEdgeSize:0,
+                        zoomMax: 10,
+                        zoomMin: 0.0001
+                      })
+      }
+      if(vm.library == Library.Cytoscape){
+        var options = {
+          // List of initial menu items
+          menuItems: [
+            {
+              id: 'collapse', // ID of menu item
+              content: 'Collapse', // Display content of menu item
+              tooltipText: 'Collapse', // Tooltip text for menu item
+              selector: 'node[expandable]', 
+              onClickFunction: function (event) { // The function to be executed on click
+                var target = event.target || event.cyTarget;
+                cy.remove(cy.$(`[ancestors *= "-${target.id()}-"]`))
+                target.style('shape', 'rectangle')
+                target.style('content', '+' + getChildrenCount(dict[target.id()]));
+              }
+            },
+            {
+              id: 'expand', // ID of menu item
+              content: 'Expand', // Display content of menu item
+              tooltipText: 'Expand', // Tooltip text for menu item
+              selector: 'node[expandable]', 
+              onClickFunction: function (event) { // The function to be executed on click
+                var target = event.target || event.cyTarget;
+                var toAdd = [];
+                drawNodesStartingAtRoot(dict[target.id()], toAdd, false);
+                cy.add(toAdd);
+                target.style('shape', 'ellipse')
+                target.style('content', 'XLSX');
+              }
+            },
+            {
+              id: 'start-from', // ID of menu item
+              content: 'Start from here', // Display content of menu item
+              tooltipText: 'Start from here', // Tooltip text for menu item
+              selector: 'node', 
+              onClickFunction: function (event) { // The function to be executed on click
+                var target = event.target || event.cyTarget;
+                var id = target.id();
+                cy.remove(cy.nodes())
+                drawNodes(id);
+              }
+            },
+            {
+              id: 'focus',
+              content: 'Focus',
+              tooltipText: 'Focus',
+              selector: 'node',
+              onClickFunction: function (event) {
+                var target = event.target || event.cyTarget;
+                cy.fit(target, 200)
+              }
             }
-          },
-          {
-            id: 'start-from', // ID of menu item
-            content: 'Start from here', // Display content of menu item
-            tooltipText: 'Start from here', // Tooltip text for menu item
-            selector: 'node', 
-            onClickFunction: function (event) { // The function to be executed on click
-              var target = event.target || event.cyTarget;
-              var id = target.id();
-              cy.remove(cy.nodes())
-              drawNodes(id);
-            }
-          },
-          {
-            id: 'focus',
-            content: 'Focus',
-            tooltipText: 'Focus',
-            selector: 'node',
-            onClickFunction: function (event) {
-              var target = event.target || event.cyTarget;
-              cy.fit(target, 200)
-            }
-          }
-        ],
-        // css classes that menu items will have
-        menuItemClasses: [
-          // add class names to this list
-        ],
-        // css classes that context menu will have
-        contextMenuClasses: [
-          // add class names to this list
-        ]
-      };
-      cy.contextMenus(options);
+          ],
+          // css classes that menu items will have
+          menuItemClasses: [
+            // add class names to this list
+          ],
+          // css classes that context menu will have
+          contextMenuClasses: [
+            // add class names to this list
+          ]
+        };
+        cy.contextMenus(options);
+
+      }
     }
   
+
+    function killAll() {
+      if (s) {
+        vm.started = undefined;
+        s.kill();
+        s = undefined;
+      }
+      if (cy) {
+        cy.destroy();
+        cy = undefined;
+      }
+    }
   }
 })();

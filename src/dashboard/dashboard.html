@@ -1,7 +1,15 @@
 
 <div>
-        <button ng-click="vm.draw('tree')">Tree</button>
-        <button ng-click="vm.draw('fractal')">Fractal</button>
+        <form class="form-inline">
+            <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
+            <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
+            <button ng-click="vm.library = vm.libraries['Cytoscape']" ng-class="{'active': vm.library == vm.libraries['Cytoscape']}" class="btn btn-default">Cytoscape</button>
+            <button ng-click="vm.library = vm.libraries['Sigma']" ng-class="{'active': vm.library == vm.libraries['Sigma']}" class="btn btn-default">Sigma</button>
+            <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
+            <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
+            <div class="form-group"> <input class="form-control" type="number" ng-model="vm.maxNodes" /></div>
+            <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
+        </form>
         <div class="container" style="width:1200px;height:800px;display:block;background-color:#cfe5f2;">
     
     </div>
