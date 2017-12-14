@@ -11,26 +11,85 @@
     controllerAs: 'vm'
   });
 
-  DashboardController.$inject = ['$element', '$q', '$timeout'];
 
-  enum Library{
-    Sigma,
-    Cytoscape
+  enum NodeProperty{
+    Created,
+    Modified,
+    Risk,
+    Links,
+    Descendands,
+    Exists
   }
 
-  function DashboardController($element: JQuery, $q: angular.IQService, $timeout: angular.ITimeoutService) {
+  enum PropertyType{
+    Number,
+    Date,
+    Boolean
+  }
+
+  enum RuleOperator{
+    Equals,
+    NotEquals,
+    LessThan,
+    GreaterThan,
+    Yes,
+    No
+  }
+
+  DashboardController.$inject = ['$element','$scope', '$q', '$timeout', '$window'];
+ 
+  function DashboardController($element: JQuery,$scope: angular.IScope, $q: angular.IQService, $timeout: angular.ITimeoutService, $window: angular.IWindowService) {
     const vm = this;
-    vm.library = Library.Sigma;
+    vm.nodeProperties = _.map(_.filter(NodeProperty, prop => angular.isNumber(prop)), prop=> prop);
+    vm.nodePropertiesEnum = NodeProperty;
+    vm.ruleOperatorsEnum = RuleOperator;
+    vm.propertyTypesEnum = PropertyType;
+    vm.ruleOperators = [];
+    vm.ruleOperators[NodeProperty.Created] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
+    vm.ruleOperators[NodeProperty.Modified] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
+    vm.ruleOperators[NodeProperty.Risk] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
+    vm.ruleOperators[NodeProperty.Links] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
+    vm.ruleOperators[NodeProperty.Descendands] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
+    vm.ruleOperators[NodeProperty.Exists] = [RuleOperator.Yes, RuleOperator.No];
+    vm.propertyTypes = [];
+    vm.propertyTypes[NodeProperty.Created] = 'Date';
+    vm.propertyTypes[NodeProperty.Modified] = 'Date';
+    vm.propertyTypes[NodeProperty.Descendands] = 'Number';
+    vm.propertyTypes[NodeProperty.Links] = 'Number';
+    vm.propertyTypes[NodeProperty.Risk] = 'Number';
+    vm.propertyTypes[NodeProperty.Exists] = 'Boolean';
+
+    vm.removeRule = (index) => _.pullAt(vm.style.rules, [index])
+    vm.ruleUp = (index) => {
+      var temp = vm.style.rules[index];
+      vm.style.rules[index] = vm.style.rules[index-1];
+      vm.style.rules[index-1] = temp;
+    }
+    vm.ruleDown = (index) => {
+      var temp = vm.style.rules[index];
+      vm.style.rules[index] = vm.style.rules[index+1];
+      vm.style.rules[index+1] = temp;
+    }
     vm.currentLayout = 'tree';
-    vm.libraries = Library;
     vm.maxNodes = 500;
-    var cy, dataset, dict,s;
+    vm.style = {
+      nodeColor: '#000000',
+      edgeColor: '#000000',
+      backgroundColor: '#ffffff',
+      rules: []
+    }
+    $element.find('.background-color-picker')[0]['value'] = vm.style.backgroundColor;
+    $element.find('.node-color-picker')[0]['value'] = vm.style.nodeColor;
+    $element.find('.edge-color-picker')[0]['value'] = vm.style.edgeColor;
+    $scope.$watch(() => vm.style, ()=> s && s.refresh(), true)
+    var dataset, dict,s;
     var maxExpandedLevel;
     var levelCounters = [];
     var sizeCounters = [];
     var totalCount = 0;
     var startingLevel = 1;
   
+
     // get exported json from cytoscape desktop via ajax
     var graphP = () => $.ajax({
       url: '../../data/example.json?_=' + new Date().getTime(), // wine-and-cheese.json
@@ -47,16 +106,12 @@
       dataType: 'text'
     });
   
-    var doesNodeAlreadyExist = (id) => vm.library == Library.Cytoscape ? cy.$id(id).length != 0 : !!s.graph.nodes(id);
+    var doesNodeAlreadyExist = (id) =>  !!s.graph.nodes(id);
   
     var drawNodesStartingAtRoot = (root, convertedData, ommitStartingEdge) => {
       var nodeAlreadyExists = doesNodeAlreadyExist(root.n);
       if(!nodeAlreadyExists){
         var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName,'child', undefined, undefined, undefined, ommitStartingEdge)
-        if(root.level == maxExpandedLevel && root.c.length){
-          nodeToAdd.style.shape = 'rectangle';
-          nodeToAdd.style.content = '+' + root.count;
-        }
       }
       if(root.level != maxExpandedLevel && root.c.length)
         for(var i = 0; i < root.c.length; i++){
@@ -90,7 +145,7 @@
 
     var drawUpwards = (root) => {
       var first = root;
-      var convertedData = vm.library == Library.Cytoscape ?  [] : {nodes: [], edges: []};
+      var convertedData =  {nodes: [], edges: []};
       var childName;
       var initialSize = getSize(root);
       var A = Math.max(sizeCounters[maxExpandedLevel]/5, 2*initialSize);
@@ -102,12 +157,8 @@
         x -= A;
         childName = root.n;
       }
-      if(vm.library == Library.Cytoscape)
-        cy.add(convertedData);
-      else{
-        s.graph.read(convertedData)
-        s.refresh()
-      }
+      s.graph.read(convertedData)
+      s.refresh()
     }
     vm.stop = () => {
       s.stopForceAtlas2();    
@@ -132,7 +183,7 @@
     
     var drawNodes = (id) => {
       var root = dict[id];
-      var convertedData = vm.library == Library.Cytoscape ? [] : {nodes: [], edges: []};
+      var convertedData = {nodes: [], edges: []};
       levelCounters = [];
       sizeCounters = [];
       totalCount = 0;
@@ -142,23 +193,11 @@
       getY(root);
       drawUpwards(root)
       drawNodesStartingAtRoot(root, convertedData, true)
-      if(vm.library == Library.Cytoscape)
-        cy.add(convertedData);
-      else{
-        s.graph.read(convertedData)
-        if(vm.currentLayout == 'fractal'){
-          vm.start();
-        }
-        s.refresh();
+      s.graph.read(convertedData)
+      if(vm.currentLayout == 'fractal'){
+        vm.start();
       }
-      if(vm.currentLayout == 'fractal')
-        if(vm.library == Library.Cytoscape)
-          cy.layout({
-            name: 'cose', 
-            randomize: true
-          }).run();
-      if(vm.library == Library.Cytoscape)
-        cy.fit(cy.nodes());
+      s.refresh();
     }
     // when both graph export json and style loaded, init cy
     var refreshAll = () => $q.all([ graphP(), styleP ]).then(data => {
@@ -167,9 +206,9 @@
     });
   
     var getEdgeId = (parentName, childName) => `${parentName} to ${childName}`
-    var edgeExists = (parentName, childName) => vm.library == Library.Cytoscape ? !!cy.$id(getEdgeId(parentName, childName)).length : !!s.graph.edges(getEdgeId(parentName, childName))
+    var edgeExists = (parentName, childName) => !!s.graph.edges(getEdgeId(parentName, childName))
 
-    var getSize = (node) => (vm.library == Library.Cytoscape ?  10000 : 100) * Math.sqrt(node.count / (2*Math.PI*totalCount));
+    var getSize = (node) => 100 * Math.sqrt(node.count / (2*Math.PI*totalCount));
     
 
     var getY = (self) => {
@@ -216,10 +255,7 @@
       };
       if(datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel ) 
         (cyNode.data as any).expandable = true;
-      if(vm.library == Library.Cytoscape)
-        convertedData.push(cyNode);
-      else
-        convertedData.nodes.push(cyNode.data);
+      convertedData.nodes.push(cyNode.data);
       if (parent && child && !edgeExists(parentName, childName)){
         var edge = {
           data: {
@@ -227,50 +263,20 @@
             source: parent.n,
             target: child.n,
             size: ommitEdge ? 10 : getSize(child) / 4,
-            weight: ommitEdge ? 10 : getSize(child) / 4
-          },
-          style: {
-            'line-color': ommitEdge ? '#ccc' : '#888',
-            'curve-style': 'bezier'
+            weight: ommitEdge ? 10 : getSize(child) / 4,
+            type: 'customShape'
           }
         }
-        if(ommitEdge){
-          edge.style['mid-target-arrow-color'] = '#ccc';
-          edge.style['mid-target-arrow-shape'] = 'triangle';
-        }
-        else{
-          edge.style['mid-target-arrow-shape'] = 'triangle';
-          
-        }
-        if (vm.currentLayout == 'tree') {
-          edge.style['width'] = ommitEdge ? 10 : getSize(child) / 4;
-          if(ommitEdge){
-            edge.style['arrow-scale'] = 100;
-          }
-          else{
-            edge.style['arrow-scale'] = 2;
-            
-          }
-        }
-        if(vm.library == Library.Cytoscape)
-          convertedData.push(edge);
-        else
-          convertedData.edges.push(edge.data);
+        convertedData.edges.push(edge.data);
 
       }
-      cyNode.style = {
-        'content': 'XLSX',
-        'text-valign': 'center',
-        'color': 'white',
-        'text-outline-color': whatToAdd == 'parent' ? '#ccc' :'#888',
-        'background-color': whatToAdd == 'parent' ? '#ccc' :'#888',
-      };
-      cyNode.style['font-size'] = (size / 3).toString() + 'px';
-      cyNode.style['width'] = size;
-      cyNode.style['height'] = size;
       cyNode.data['size'] = size;
       cyNode.data['mass'] = size;
-      cyNode.data['label'] = cyNode.style['content'];
+      cyNode.data['label'] = 'XLSX';
+      cyNode.data['color'] = '#ccc';
+      cyNode.data['type'] = 'customShape';
+      cyNode.data['descendants'] = datasetNode.count;
+      cyNode.data['links'] = datasetNode.c.length;
       if (vm.currentLayout == 'tree') {
         var base = 1.1;
         var A = sizeCounters[maxExpandedLevel]/5 ;
@@ -282,10 +288,8 @@
           y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel)* X * (Math.pow(base,newLevel-1)-1)
         };
       }
-      if(vm.library == Library.Sigma){
-        (cyNode.data as any).x = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
-        (cyNode.data as any).y = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
-      }
+      (cyNode.data as any).x = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
+      (cyNode.data as any).y = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
       return cyNode;
     }
             
@@ -311,125 +315,174 @@
     vm.draw = () => {
       refreshAll()
     } 
+    function getRandomColor() {
+      var letters = '0123456789ABCDEF';
+      var color = '#';
+      for (var i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
 
+    var resizeCanvas = ()=> {
+      
+            var canvas = $element.find('.canvas');
+            var container = $element.find('.canvas-container');
+            canvas.height(container.height());
+            canvas.width(container.width());
+      
+          }
+
+    
+    $($window).resize(resizeCanvas)
+    $timeout(resizeCanvas)
+    var evaluateRule = (toCompare, operator, value) => {
+      switch(operator){
+        case RuleOperator.Equals:
+          return toCompare == value;
+        case RuleOperator.GreaterThan:
+          return toCompare > value;
+        case RuleOperator.LessThan:
+          return toCompare < value;
+        case RuleOperator.NotEquals:
+          return toCompare != value;
+      }
+
+    }
     function initCy(then){
       dataset = then[0];
       var styleJson = then[1];
       dict = {};
       createLibraryData(dataset, null, null, '');
       killAll();
-      var element = $element.find('.container')[0]
-      if(vm.library == Library.Cytoscape)
-        cy = (window as any).cy = cytoscape({
-          container: element,
-          layout: { 
-            name: 'preset',
-            boundingBox: {x1: 0 ,y1: 0,x2: 1000000,y2: 100000}
-          },
-          motionBlur: true,
-          selectionType: 'single',
-          boxSelectionEnabled: false,
-          hideEdgesOnViewport: true,
-          style: (cytoscape as any).stylesheet()
-          .selector('node')
-            .css({
-              'text-valign': 'center',
-              'color': 'white',
-              'text-outline-width': 2,
-              'text-outline-color': '#888',
-              'background-color': '#888'
-            })
-        });
-      if(vm.library == Library.Sigma){
-        s = new sigma(element)
-        sigma.plugins.dragNodes(s, s.renderers[0]);
-        s.settings({
-                        hideEdgesOnMove: true,
-                        minNodeSize:0,
-                        maxNodeSize:0,
-                        minEdgeSize:0,
-                        maxEdgeSize:0,
-                        zoomMax: 10,
-                        zoomMin: 0.0001
-                      })
+      var element = $element.find('.canvas')[0]
+      sigma.canvas.edges.customShape = (edge, source, target, context, settings) => {
+        var color,
+            prefix = settings('prefix') || '',
+            size = edge[prefix + 'size'] || 1,
+            edgeColor = settings('edgeColor'),
+            defaultNodeColor = settings('defaultNodeColor'),
+            defaultEdgeColor = settings('defaultEdgeColor');
+    
+        color = vm.style.edgeColor;
+    
+        context.strokeStyle = color;
+        context.lineWidth = size;
+        context.beginPath();
+        context.moveTo(
+          source[prefix + 'x'],
+          source[prefix + 'y']
+        );
+        context.lineTo(
+          target[prefix + 'x'],
+          target[prefix + 'y']
+        );
+        context.stroke();
+      };
+      sigma.canvas.nodes.customShape = (node, context, settings) => {
+        var prefix = (settings && settings('prefix')) || '',
+            size = node[prefix + 'size'], shape = 'circle', halo, haloColor;
+        
+        context.fillStyle = vm.style.nodeColor;
+        for(var i = vm.style.rules.length - 1; i>=0;i--){
+          var rule = vm.style.rules[i];
+          switch(rule.property){
+            case NodeProperty.Links:
+              if(evaluateRule(node['links'],rule.operator, rule.numericValue)){
+                if(rule.changeColor)
+                  context.fillStyle = rule.color;
+                if(rule.changeShape)
+                  shape = rule.square ? 'square' : 'circle';
+                if(rule.halo){
+                  halo = true;
+                  haloColor = rule.haloColor;
+                }
+              }
+              break;
+            case NodeProperty.Descendands:
+              if(evaluateRule(node['descendants'],rule.operator, rule.numericValue)){
+                if(rule.changeColor)
+                  context.fillStyle = rule.color;
+                if(rule.changeShape)
+                  shape = rule.square ? 'square' : 'circle';
+                  if(rule.halo){
+                    halo = true;
+                    haloColor = rule.haloColor;
+                  }
+              }
+              break;
+          }
+        }
+        context.beginPath();
+        if(shape == 'circle'){
+          drawCircle(context, node, prefix);
+        }
+        else
+          drawSquare(context, node, prefix)
+        context.closePath();
+        context.fill();
+        if(halo){
+          var previousCompositeOperation = context.globalCompositeOperation;
+          context.globalCompositeOperation='destination-over';
+          context.fillStyle = haloColor ? haloColor : '#fff';
+          context.beginPath();
+          if(shape == 'circle')
+            drawCircle(context, node, prefix, 2);
+          else
+            drawSquare(context, node, prefix, 2)
+          context.closePath();
+          context.fill();
+          context.globalCompositeOperation = previousCompositeOperation;
+        }
+        
       }
-      if(vm.library == Library.Cytoscape){
-        var options = {
-          // List of initial menu items
-          menuItems: [
-            {
-              id: 'collapse', // ID of menu item
-              content: 'Collapse', // Display content of menu item
-              tooltipText: 'Collapse', // Tooltip text for menu item
-              selector: 'node[expandable]', 
-              onClickFunction: function (event) { // The function to be executed on click
-                var target = event.target || event.cyTarget;
-                cy.remove(cy.$(`[ancestors *= "-${target.id()}-"]`))
-                target.style('shape', 'rectangle')
-                target.style('content', '+' + getChildrenCount(dict[target.id()]));
-              }
-            },
-            {
-              id: 'expand', // ID of menu item
-              content: 'Expand', // Display content of menu item
-              tooltipText: 'Expand', // Tooltip text for menu item
-              selector: 'node[expandable]', 
-              onClickFunction: function (event) { // The function to be executed on click
-                var target = event.target || event.cyTarget;
-                var toAdd = [];
-                drawNodesStartingAtRoot(dict[target.id()], toAdd, false);
-                cy.add(toAdd);
-                target.style('shape', 'ellipse')
-                target.style('content', 'XLSX');
-              }
-            },
-            {
-              id: 'start-from', // ID of menu item
-              content: 'Start from here', // Display content of menu item
-              tooltipText: 'Start from here', // Tooltip text for menu item
-              selector: 'node', 
-              onClickFunction: function (event) { // The function to be executed on click
-                var target = event.target || event.cyTarget;
-                var id = target.id();
-                cy.remove(cy.nodes())
-                drawNodes(id);
-              }
-            },
-            {
-              id: 'focus',
-              content: 'Focus',
-              tooltipText: 'Focus',
-              selector: 'node',
-              onClickFunction: function (event) {
-                var target = event.target || event.cyTarget;
-                cy.fit(target, 200)
-              }
-            }
-          ],
-          // css classes that menu items will have
-          menuItemClasses: [
-            // add class names to this list
-          ],
-          // css classes that context menu will have
-          contextMenuClasses: [
-            // add class names to this list
-          ]
-        };
-        cy.contextMenus(options);
-
+      s = new sigma({
+        renderers: [
+          {
+            container: element,
+            type: 'canvas' // sigma.renderers.canvas works as well
+          } as any
+        ]
+      });
+      sigma.plugins.dragNodes(s, s.renderers[0]);
+      s.settings({
+                      hideEdgesOnMove: true,
+                      minNodeSize:0,
+                      maxNodeSize:0,
+                      minEdgeSize:0,
+                      maxEdgeSize:0,
+                      zoomMax: 10,
+                      zoomMin: 0.0001
+                    })
+      
       }
-    }
-  
+      var drawCircle = (context, node, prefix, ratio:number = 1) => {
+        context.arc(
+          node[prefix + 'x'],
+          node[prefix + 'y'],
+          ratio*node[prefix + 'size'],
+          0,
+          Math.PI * 2,
+          true
+        );
+    
+      }
+      var drawSquare = (context, node, prefix, ratio:number = 1) => {
+        var size = node[prefix + 'size'];
+        context.rect(
+          node[prefix + 'x'] - ratio*size,
+          node[prefix + 'y'] - ratio*size,
+          size * 2 * ratio,
+          size * 2* ratio
+        );
+    
+      }
 
     function killAll() {
       if (s) {
         vm.started = undefined;
         s.kill();
         s = undefined;
-      }
-      if (cy) {
-        cy.destroy();
-        cy = undefined;
       }
     }
   }
