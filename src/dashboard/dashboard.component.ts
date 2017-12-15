@@ -27,13 +27,25 @@
     Boolean
   }
 
-  enum RuleOperator{
-    Equals,
-    NotEquals,
-    LessThan,
-    GreaterThan,
-    Yes,
-    No
+  enum ViewType{
+    Risk,
+    Age,
+    Size
+  }
+
+  enum FilterType{
+    Spreadsheets = 'Spreadsheets',
+    Databases = 'Databases'
+  }
+  enum RiskCategory{
+    None,
+    Low,
+    Medium,
+    High
+  }
+  enum FileType{
+    Spreadsheets,
+    Databases
   }
 
   DashboardController.$inject = ['$element','$scope', '$q', '$timeout', '$window'];
@@ -41,16 +53,11 @@
   function DashboardController($element: JQuery,$scope: angular.IScope, $q: angular.IQService, $timeout: angular.ITimeoutService, $window: angular.IWindowService) {
     const vm = this;
     vm.nodeProperties = _.map(_.filter(NodeProperty, prop => angular.isNumber(prop)), prop=> prop);
+    vm.viewTypes = _.map(_.filter(ViewType, prop => angular.isNumber(prop)), prop=> prop);
     vm.nodePropertiesEnum = NodeProperty;
-    vm.ruleOperatorsEnum = RuleOperator;
+    vm.viewTypesEnum = ViewType;
+    vm.view = ViewType.Risk;
     vm.propertyTypesEnum = PropertyType;
-    vm.ruleOperators = [];
-    vm.ruleOperators[NodeProperty.Created] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-    vm.ruleOperators[NodeProperty.Modified] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-    vm.ruleOperators[NodeProperty.Risk] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-    vm.ruleOperators[NodeProperty.Links] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-    vm.ruleOperators[NodeProperty.Descendands] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-    vm.ruleOperators[NodeProperty.Exists] = [RuleOperator.Yes, RuleOperator.No];
     vm.propertyTypes = [];
     vm.propertyTypes[NodeProperty.Created] = 'Date';
     vm.propertyTypes[NodeProperty.Modified] = 'Date';
@@ -58,38 +65,24 @@
     vm.propertyTypes[NodeProperty.Links] = 'Number';
     vm.propertyTypes[NodeProperty.Risk] = 'Number';
     vm.propertyTypes[NodeProperty.Exists] = 'Boolean';
-
-    vm.removeRule = (index) => _.pullAt(vm.style.rules, [index])
-    vm.ruleUp = (index) => {
-      var temp = vm.style.rules[index];
-      vm.style.rules[index] = vm.style.rules[index-1];
-      vm.style.rules[index-1] = temp;
-    }
-    vm.ruleDown = (index) => {
-      var temp = vm.style.rules[index];
-      vm.style.rules[index] = vm.style.rules[index+1];
-      vm.style.rules[index+1] = temp;
-    }
+    vm.filters = {}
+    vm.getFiltersActive = () => _.some(vm.filters, filter => filter !== undefined)
+    vm.getFilterActive = (filter) => !!vm.filters[FilterType[filter]];
+    vm.toggleFilter = (filter) => vm.filters[FilterType[filter]] = !vm.filters[FilterType[filter]]; 
+    vm.resetFilters = () => _.each(_.keys(vm.filters), key => vm.filters[key] = undefined);
     vm.currentLayout = 'tree';
     vm.maxNodes = 500;
-    vm.style = {
-      nodeColor: '#000000',
-      edgeColor: '#000000',
-      backgroundColor: '#ffffff',
-      rules: []
-    }
-    $element.find('.background-color-picker')[0]['value'] = vm.style.backgroundColor;
-    $element.find('.node-color-picker')[0]['value'] = vm.style.nodeColor;
-    $element.find('.edge-color-picker')[0]['value'] = vm.style.edgeColor;
-    $scope.$watch(() => vm.style, ()=> s && s.refresh(), true)
     var dataset, dict,s;
     var maxExpandedLevel;
     var levelCounters = [];
     var sizeCounters = [];
     var totalCount = 0;
     var startingLevel = 1;
-  
-
+    $scope.$watch(()=> [vm.filters, vm.view], () => s && refreshGraph(), true);
+    var refreshGraph = () => {
+      s.refresh();
+      s.refresh();
+    }
     // get exported json from cytoscape desktop via ajax
     var graphP = () => $.ajax({
       url: '../../data/example.json?_=' + new Date().getTime(), // wine-and-cheese.json
@@ -192,12 +185,20 @@
       maxExpandedLevel = getMaxExpandedLevel();
       getY(root);
       drawUpwards(root)
+      vm.nodesCount = 0;
+      vm.linksCount = 0;
+      vm.databasesCount = 0;
+      vm.spreadsheetsCount = 0;
       drawNodesStartingAtRoot(root, convertedData, true)
       s.graph.read(convertedData)
       if(vm.currentLayout == 'fractal'){
         vm.start();
       }
-      s.refresh();
+      $timeout(()=>{
+        resizeCanvas();
+        s.refresh();
+        
+      })
     }
     // when both graph export json and style loaded, init cy
     var refreshAll = () => $q.all([ graphP(), styleP ]).then(data => {
@@ -240,6 +241,37 @@
       }
       return self.y;
     }
+    var assignNodeColor = (node) => {
+      if(vm.view == ViewType.Risk){
+        switch(node.riskCategory){
+          case RiskCategory.High:
+            node.color = '#f00';
+            break;
+          case RiskCategory.Medium:
+            node.color = '#ff0';
+            break;
+          case RiskCategory.Low:
+            node.color = '#0f0';
+            break;
+          default:
+            node.color = '#000';
+        }
+      }
+      else{
+        node.color = '#000';
+      }
+      
+      if(vm.getFiltersActive()){
+        var tempColor = '#bbb';
+        if(vm.filters[FilterType.Databases] && node.filetype == FileType.Databases){
+          tempColor = node.color;
+        }
+        if(vm.filters[FilterType.Spreadsheets] && node.filetype == FileType.Spreadsheets){
+          tempColor = node.color;
+        }
+        node.color = tempColor;
+      }
+    }
     var addCyDataToQueue = (convertedData, childName, parentName, whatToAdd, y?, x?, size?, ommitEdge?) => {
       var child = dict[childName];
       var parent = dict[parentName];
@@ -256,6 +288,11 @@
       if(datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel ) 
         (cyNode.data as any).expandable = true;
       convertedData.nodes.push(cyNode.data);
+      vm.nodesCount++;
+      if(datasetNode.t == FileType.Databases)
+        vm.databasesCount++;
+      else
+        vm.spreadsheetsCount++;
       if (parent && child && !edgeExists(parentName, childName)){
         var edge = {
           data: {
@@ -263,20 +300,20 @@
             source: parent.n,
             target: child.n,
             size: ommitEdge ? 10 : getSize(child) / 4,
-            weight: ommitEdge ? 10 : getSize(child) / 4,
-            type: 'customShape'
+            weight: ommitEdge ? 10 : getSize(child) / 4
           }
         }
         convertedData.edges.push(edge.data);
-
+        vm.linksCount++;
       }
       cyNode.data['size'] = size;
       cyNode.data['mass'] = size;
       cyNode.data['label'] = 'XLSX';
-      cyNode.data['color'] = '#ccc';
       cyNode.data['type'] = 'customShape';
       cyNode.data['descendants'] = datasetNode.count;
       cyNode.data['links'] = datasetNode.c.length;
+      cyNode.data['filetype'] = datasetNode.t;
+      cyNode.data['riskCategory'] = datasetNode.rc;
       if (vm.currentLayout == 'tree') {
         var base = 1.1;
         var A = sizeCounters[maxExpandedLevel]/5 ;
@@ -315,40 +352,20 @@
     vm.draw = () => {
       refreshAll()
     } 
-    function getRandomColor() {
-      var letters = '0123456789ABCDEF';
-      var color = '#';
-      for (var i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-      }
-      return color;
-    }
 
     var resizeCanvas = ()=> {
       
             var canvas = $element.find('.canvas');
             var container = $element.find('.canvas-container');
+            var width = vm.toggled ? container.width() : container.width() + 1024;
             canvas.height(container.height());
-            canvas.width(container.width());
+            canvas.width(width);
       
           }
 
     
     $($window).resize(resizeCanvas)
-    $timeout(resizeCanvas)
-    var evaluateRule = (toCompare, operator, value) => {
-      switch(operator){
-        case RuleOperator.Equals:
-          return toCompare == value;
-        case RuleOperator.GreaterThan:
-          return toCompare > value;
-        case RuleOperator.LessThan:
-          return toCompare < value;
-        case RuleOperator.NotEquals:
-          return toCompare != value;
-      }
-
-    }
+    
     function initCy(then){
       dataset = then[0];
       var styleJson = then[1];
@@ -356,15 +373,28 @@
       createLibraryData(dataset, null, null, '');
       killAll();
       var element = $element.find('.canvas')[0]
-      sigma.canvas.edges.customShape = (edge, source, target, context, settings) => {
-        var color,
+      
+
+      sigma.canvas.edges.def = function(edge, source, target, context, settings) {
+        var color = edge.color,
             prefix = settings('prefix') || '',
             size = edge[prefix + 'size'] || 1,
             edgeColor = settings('edgeColor'),
             defaultNodeColor = settings('defaultNodeColor'),
             defaultEdgeColor = settings('defaultEdgeColor');
     
-        color = vm.style.edgeColor;
+        if (!color)
+          switch (edgeColor) {
+            case 'source':
+              color = source.color || defaultNodeColor;
+              break;
+            case 'target':
+              color = target.color || defaultNodeColor;
+              break;
+            default:
+              color = defaultEdgeColor;
+              break;
+          }
     
         context.strokeStyle = color;
         context.lineWidth = size;
@@ -379,40 +409,12 @@
         );
         context.stroke();
       };
+
       sigma.canvas.nodes.customShape = (node, context, settings) => {
         var prefix = (settings && settings('prefix')) || '',
-            size = node[prefix + 'size'], shape = 'circle', halo, haloColor;
-        
-        context.fillStyle = vm.style.nodeColor;
-        for(var i = vm.style.rules.length - 1; i>=0;i--){
-          var rule = vm.style.rules[i];
-          switch(rule.property){
-            case NodeProperty.Links:
-              if(evaluateRule(node['links'],rule.operator, rule.numericValue)){
-                if(rule.changeColor)
-                  context.fillStyle = rule.color;
-                if(rule.changeShape)
-                  shape = rule.square ? 'square' : 'circle';
-                if(rule.halo){
-                  halo = true;
-                  haloColor = rule.haloColor;
-                }
-              }
-              break;
-            case NodeProperty.Descendands:
-              if(evaluateRule(node['descendants'],rule.operator, rule.numericValue)){
-                if(rule.changeColor)
-                  context.fillStyle = rule.color;
-                if(rule.changeShape)
-                  shape = rule.square ? 'square' : 'circle';
-                  if(rule.halo){
-                    halo = true;
-                    haloColor = rule.haloColor;
-                  }
-              }
-              break;
-          }
-        }
+            size = node[prefix + 'size'], shape = (node.filetype == FileType.Databases ? 'square' : 'circle'), halo, haloColor;
+        assignNodeColor(node)
+        context.fillStyle = node.color;
         context.beginPath();
         if(shape == 'circle'){
           drawCircle(context, node, prefix);
@@ -439,11 +441,14 @@
       s = new sigma({
         renderers: [
           {
+            settings:{
+              edgeColor: 'target',
+            },
             container: element,
             type: 'canvas' // sigma.renderers.canvas works as well
           } as any
         ]
-      });
+      } as any);
       sigma.plugins.dragNodes(s, s.renderers[0]);
       s.settings({
                       hideEdgesOnMove: true,
@@ -477,7 +482,10 @@
         );
     
       }
-
+      vm.toggle = () => {
+        vm.toggled = !vm.toggled;
+        $timeout(resizeCanvas, 1000);
+      }
     function killAll() {
       if (s) {
         vm.started = undefined;

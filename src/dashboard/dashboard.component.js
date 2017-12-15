@@ -24,29 +24,38 @@
         PropertyType[PropertyType["Date"] = 1] = "Date";
         PropertyType[PropertyType["Boolean"] = 2] = "Boolean";
     })(PropertyType || (PropertyType = {}));
-    var RuleOperator;
-    (function (RuleOperator) {
-        RuleOperator[RuleOperator["Equals"] = 0] = "Equals";
-        RuleOperator[RuleOperator["NotEquals"] = 1] = "NotEquals";
-        RuleOperator[RuleOperator["LessThan"] = 2] = "LessThan";
-        RuleOperator[RuleOperator["GreaterThan"] = 3] = "GreaterThan";
-        RuleOperator[RuleOperator["Yes"] = 4] = "Yes";
-        RuleOperator[RuleOperator["No"] = 5] = "No";
-    })(RuleOperator || (RuleOperator = {}));
+    var ViewType;
+    (function (ViewType) {
+        ViewType[ViewType["Risk"] = 0] = "Risk";
+        ViewType[ViewType["Age"] = 1] = "Age";
+        ViewType[ViewType["Size"] = 2] = "Size";
+    })(ViewType || (ViewType = {}));
+    var FilterType;
+    (function (FilterType) {
+        FilterType["Spreadsheets"] = "Spreadsheets";
+        FilterType["Databases"] = "Databases";
+    })(FilterType || (FilterType = {}));
+    var RiskCategory;
+    (function (RiskCategory) {
+        RiskCategory[RiskCategory["None"] = 0] = "None";
+        RiskCategory[RiskCategory["Low"] = 1] = "Low";
+        RiskCategory[RiskCategory["Medium"] = 2] = "Medium";
+        RiskCategory[RiskCategory["High"] = 3] = "High";
+    })(RiskCategory || (RiskCategory = {}));
+    var FileType;
+    (function (FileType) {
+        FileType[FileType["Spreadsheets"] = 0] = "Spreadsheets";
+        FileType[FileType["Databases"] = 1] = "Databases";
+    })(FileType || (FileType = {}));
     DashboardController.$inject = ['$element', '$scope', '$q', '$timeout', '$window'];
     function DashboardController($element, $scope, $q, $timeout, $window) {
         var vm = this;
         vm.nodeProperties = _.map(_.filter(NodeProperty, function (prop) { return angular.isNumber(prop); }), function (prop) { return prop; });
+        vm.viewTypes = _.map(_.filter(ViewType, function (prop) { return angular.isNumber(prop); }), function (prop) { return prop; });
         vm.nodePropertiesEnum = NodeProperty;
-        vm.ruleOperatorsEnum = RuleOperator;
+        vm.viewTypesEnum = ViewType;
+        vm.view = ViewType.Risk;
         vm.propertyTypesEnum = PropertyType;
-        vm.ruleOperators = [];
-        vm.ruleOperators[NodeProperty.Created] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-        vm.ruleOperators[NodeProperty.Modified] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-        vm.ruleOperators[NodeProperty.Risk] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-        vm.ruleOperators[NodeProperty.Links] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-        vm.ruleOperators[NodeProperty.Descendands] = [RuleOperator.Equals, RuleOperator.NotEquals, RuleOperator.GreaterThan, RuleOperator.LessThan];
-        vm.ruleOperators[NodeProperty.Exists] = [RuleOperator.Yes, RuleOperator.No];
         vm.propertyTypes = [];
         vm.propertyTypes[NodeProperty.Created] = 'Date';
         vm.propertyTypes[NodeProperty.Modified] = 'Date';
@@ -54,35 +63,24 @@
         vm.propertyTypes[NodeProperty.Links] = 'Number';
         vm.propertyTypes[NodeProperty.Risk] = 'Number';
         vm.propertyTypes[NodeProperty.Exists] = 'Boolean';
-        vm.removeRule = function (index) { return _.pullAt(vm.style.rules, [index]); };
-        vm.ruleUp = function (index) {
-            var temp = vm.style.rules[index];
-            vm.style.rules[index] = vm.style.rules[index - 1];
-            vm.style.rules[index - 1] = temp;
-        };
-        vm.ruleDown = function (index) {
-            var temp = vm.style.rules[index];
-            vm.style.rules[index] = vm.style.rules[index + 1];
-            vm.style.rules[index + 1] = temp;
-        };
+        vm.filters = {};
+        vm.getFiltersActive = function () { return _.some(vm.filters, function (filter) { return filter !== undefined; }); };
+        vm.getFilterActive = function (filter) { return !!vm.filters[FilterType[filter]]; };
+        vm.toggleFilter = function (filter) { return vm.filters[FilterType[filter]] = !vm.filters[FilterType[filter]]; };
+        vm.resetFilters = function () { return _.each(_.keys(vm.filters), function (key) { return vm.filters[key] = undefined; }); };
         vm.currentLayout = 'tree';
         vm.maxNodes = 500;
-        vm.style = {
-            nodeColor: '#000000',
-            edgeColor: '#000000',
-            backgroundColor: '#ffffff',
-            rules: []
-        };
-        $element.find('.background-color-picker')[0]['value'] = vm.style.backgroundColor;
-        $element.find('.node-color-picker')[0]['value'] = vm.style.nodeColor;
-        $element.find('.edge-color-picker')[0]['value'] = vm.style.edgeColor;
-        $scope.$watch(function () { return vm.style; }, function () { return s && s.refresh(); }, true);
         var dataset, dict, s;
         var maxExpandedLevel;
         var levelCounters = [];
         var sizeCounters = [];
         var totalCount = 0;
         var startingLevel = 1;
+        $scope.$watch(function () { return [vm.filters, vm.view]; }, function () { return s && refreshGraph(); }, true);
+        var refreshGraph = function () {
+            s.refresh();
+            s.refresh();
+        };
         // get exported json from cytoscape desktop via ajax
         var graphP = function () { return $.ajax({
             url: '../../data/example.json?_=' + new Date().getTime(),
@@ -175,12 +173,19 @@
             maxExpandedLevel = getMaxExpandedLevel();
             getY(root);
             drawUpwards(root);
+            vm.nodesCount = 0;
+            vm.linksCount = 0;
+            vm.databasesCount = 0;
+            vm.spreadsheetsCount = 0;
             drawNodesStartingAtRoot(root, convertedData, true);
             s.graph.read(convertedData);
             if (vm.currentLayout == 'fractal') {
                 vm.start();
             }
-            s.refresh();
+            $timeout(function () {
+                resizeCanvas();
+                s.refresh();
+            });
         };
         // when both graph export json and style loaded, init cy
         var refreshAll = function () { return $q.all([graphP(), styleP]).then(function (data) {
@@ -223,6 +228,36 @@
             }
             return self.y;
         };
+        var assignNodeColor = function (node) {
+            if (vm.view == ViewType.Risk) {
+                switch (node.riskCategory) {
+                    case RiskCategory.High:
+                        node.color = '#f00';
+                        break;
+                    case RiskCategory.Medium:
+                        node.color = '#ff0';
+                        break;
+                    case RiskCategory.Low:
+                        node.color = '#0f0';
+                        break;
+                    default:
+                        node.color = '#000';
+                }
+            }
+            else {
+                node.color = '#000';
+            }
+            if (vm.getFiltersActive()) {
+                var tempColor = '#bbb';
+                if (vm.filters[FilterType.Databases] && node.filetype == FileType.Databases) {
+                    tempColor = node.color;
+                }
+                if (vm.filters[FilterType.Spreadsheets] && node.filetype == FileType.Spreadsheets) {
+                    tempColor = node.color;
+                }
+                node.color = tempColor;
+            }
+        };
         var addCyDataToQueue = function (convertedData, childName, parentName, whatToAdd, y, x, size, ommitEdge) {
             var child = dict[childName];
             var parent = dict[parentName];
@@ -239,6 +274,11 @@
             if (datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel)
                 cyNode.data.expandable = true;
             convertedData.nodes.push(cyNode.data);
+            vm.nodesCount++;
+            if (datasetNode.t == FileType.Databases)
+                vm.databasesCount++;
+            else
+                vm.spreadsheetsCount++;
             if (parent && child && !edgeExists(parentName, childName)) {
                 var edge = {
                     data: {
@@ -246,19 +286,20 @@
                         source: parent.n,
                         target: child.n,
                         size: ommitEdge ? 10 : getSize(child) / 4,
-                        weight: ommitEdge ? 10 : getSize(child) / 4,
-                        type: 'customShape'
+                        weight: ommitEdge ? 10 : getSize(child) / 4
                     }
                 };
                 convertedData.edges.push(edge.data);
+                vm.linksCount++;
             }
             cyNode.data['size'] = size;
             cyNode.data['mass'] = size;
             cyNode.data['label'] = 'XLSX';
-            cyNode.data['color'] = '#ccc';
             cyNode.data['type'] = 'customShape';
             cyNode.data['descendants'] = datasetNode.count;
             cyNode.data['links'] = datasetNode.c.length;
+            cyNode.data['filetype'] = datasetNode.t;
+            cyNode.data['riskCategory'] = datasetNode.rc;
             if (vm.currentLayout == 'tree') {
                 var base = 1.1;
                 var A = sizeCounters[maxExpandedLevel] / 5;
@@ -294,34 +335,14 @@
         vm.draw = function () {
             refreshAll();
         };
-        function getRandomColor() {
-            var letters = '0123456789ABCDEF';
-            var color = '#';
-            for (var i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-        }
         var resizeCanvas = function () {
             var canvas = $element.find('.canvas');
             var container = $element.find('.canvas-container');
+            var width = vm.toggled ? container.width() : container.width() + 1024;
             canvas.height(container.height());
-            canvas.width(container.width());
+            canvas.width(width);
         };
         $($window).resize(resizeCanvas);
-        $timeout(resizeCanvas);
-        var evaluateRule = function (toCompare, operator, value) {
-            switch (operator) {
-                case RuleOperator.Equals:
-                    return toCompare == value;
-                case RuleOperator.GreaterThan:
-                    return toCompare > value;
-                case RuleOperator.LessThan:
-                    return toCompare < value;
-                case RuleOperator.NotEquals:
-                    return toCompare != value;
-            }
-        };
         function initCy(then) {
             dataset = then[0];
             var styleJson = then[1];
@@ -329,9 +350,20 @@
             createLibraryData(dataset, null, null, '');
             killAll();
             var element = $element.find('.canvas')[0];
-            sigma.canvas.edges.customShape = function (edge, source, target, context, settings) {
-                var color, prefix = settings('prefix') || '', size = edge[prefix + 'size'] || 1, edgeColor = settings('edgeColor'), defaultNodeColor = settings('defaultNodeColor'), defaultEdgeColor = settings('defaultEdgeColor');
-                color = vm.style.edgeColor;
+            sigma.canvas.edges.def = function (edge, source, target, context, settings) {
+                var color = edge.color, prefix = settings('prefix') || '', size = edge[prefix + 'size'] || 1, edgeColor = settings('edgeColor'), defaultNodeColor = settings('defaultNodeColor'), defaultEdgeColor = settings('defaultEdgeColor');
+                if (!color)
+                    switch (edgeColor) {
+                        case 'source':
+                            color = source.color || defaultNodeColor;
+                            break;
+                        case 'target':
+                            color = target.color || defaultNodeColor;
+                            break;
+                        default:
+                            color = defaultEdgeColor;
+                            break;
+                    }
                 context.strokeStyle = color;
                 context.lineWidth = size;
                 context.beginPath();
@@ -340,37 +372,9 @@
                 context.stroke();
             };
             sigma.canvas.nodes.customShape = function (node, context, settings) {
-                var prefix = (settings && settings('prefix')) || '', size = node[prefix + 'size'], shape = 'circle', halo, haloColor;
-                context.fillStyle = vm.style.nodeColor;
-                for (var i = vm.style.rules.length - 1; i >= 0; i--) {
-                    var rule = vm.style.rules[i];
-                    switch (rule.property) {
-                        case NodeProperty.Links:
-                            if (evaluateRule(node['links'], rule.operator, rule.numericValue)) {
-                                if (rule.changeColor)
-                                    context.fillStyle = rule.color;
-                                if (rule.changeShape)
-                                    shape = rule.square ? 'square' : 'circle';
-                                if (rule.halo) {
-                                    halo = true;
-                                    haloColor = rule.haloColor;
-                                }
-                            }
-                            break;
-                        case NodeProperty.Descendands:
-                            if (evaluateRule(node['descendants'], rule.operator, rule.numericValue)) {
-                                if (rule.changeColor)
-                                    context.fillStyle = rule.color;
-                                if (rule.changeShape)
-                                    shape = rule.square ? 'square' : 'circle';
-                                if (rule.halo) {
-                                    halo = true;
-                                    haloColor = rule.haloColor;
-                                }
-                            }
-                            break;
-                    }
-                }
+                var prefix = (settings && settings('prefix')) || '', size = node[prefix + 'size'], shape = (node.filetype == FileType.Databases ? 'square' : 'circle'), halo, haloColor;
+                assignNodeColor(node);
+                context.fillStyle = node.color;
                 context.beginPath();
                 if (shape == 'circle') {
                     drawCircle(context, node, prefix);
@@ -396,6 +400,9 @@
             s = new sigma({
                 renderers: [
                     {
+                        settings: {
+                            edgeColor: 'target',
+                        },
                         container: element,
                         type: 'canvas' // sigma.renderers.canvas works as well
                     }
@@ -420,6 +427,10 @@
             if (ratio === void 0) { ratio = 1; }
             var size = node[prefix + 'size'];
             context.rect(node[prefix + 'x'] - ratio * size, node[prefix + 'y'] - ratio * size, size * 2 * ratio, size * 2 * ratio);
+        };
+        vm.toggle = function () {
+            vm.toggled = !vm.toggled;
+            $timeout(resizeCanvas, 1000);
         };
         function killAll() {
             if (s) {

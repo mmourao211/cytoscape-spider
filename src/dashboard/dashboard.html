@@ -1,56 +1,59 @@
 
 <div style="width: 100%;height:100%;">
-    <div class="col-md-5">
-        <div class="col-md-12">
-            <form class="form-inline">
-                <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
-                <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
-                <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
-                <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
-                <div class="form-group"> <input class="form-control" type="number" ng-model="vm.maxNodes" /></div>
-                <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
-            </form>
-        </div>
-        
-        <div class="col-md-12">
-            <form class="form-inline">
-                <div class="form-group"><input type="color" class="node-color-picker" ng-model="vm.style.nodeColor"></div>
-                <div class="form-group"><input type="color" class="edge-color-picker" ng-model="vm.style.edgeColor"></div>
-                <div class="form-group"><input type="color" class="background-color-picker" ng-model="vm.style.backgroundColor" ></div>
-            </form>
-        </div>
-        <div class="col-md-12">
-            <h4>Rules</h4>
-            <button ng-click="vm.style.rules.push({})" class="btn btn-default pull-right">Add</button>
-            
-            <div ng-repeat="rule in vm.style.rules">
-                <form class="form-inline">
-                    <div class="form-group" style="margin-top:10px;">
-                        <button  class="btn btn-sm btn-danger" ng-click="vm.removeRule($index)">x</button>
-                        <button ng-show="!$first" class="btn btn-sm btn-default" ng-click="vm.ruleUp($index)">Up</button>
-                        <button ng-show="!$last" class="btn btn-sm btn-default" ng-click="vm.ruleDown($index)">Down</button>
-                        <select name="property" class="form-control input-sm" ng-model="rule.property" ng-options="vm.nodePropertiesEnum[id] for id in vm.nodeProperties" ng-change="rule.propertyType = vm.propertyTypes[rule.property]"></select>
-                        <select name="operator" class="form-control input-sm" ng-model="rule.operator" ng-options="vm.ruleOperatorsEnum[id] for id in vm.ruleOperators[rule.property]"></select>
-                        <div ng-switch="rule.propertyType" style="display:inline;">
-                            <input ng-switch-when="Number" type="number" class="form-control input-sm" ng-model="rule.numericValue">
-                            <input ng-switch-when="Date" type="date" class="form-control input-sm" ng-model="rule.dateValue">
+              <div id="wrapper" ng-class="{toggled: vm.toggled}" style="height:100%;">
+          
+                  <!-- Sidebar -->
+                  <div id="sidebar-wrapper">
+                        <div class="col-md-12">
+                            <h4>Diagram Type</h4>
+                            <form class="form-inline">
+                                <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
+                                <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
+                                <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
+                                <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
+                                <div class="form-group"> <input class="form-control" type="number" ng-model="vm.maxNodes" /></div>
+                                <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
+                            </form>
                         </div>
-                        <button class="btn btn-sm btn-default" ng-class="{active: rule.changeColor}" ng-click="rule.changeColor = !rule.changeColor">Color</button>
-                        <input ng-show="rule.changeColor" type="color" ng-model="rule.color">
-                        <button class="btn btn-sm btn-default" ng-class="{active: rule.changeShape}" ng-click="rule.changeShape = !rule.changeShape">Shape</button>
-                        <button ng-show="rule.changeShape" class="btn btn-sm btn-default" ng-class="{active: rule.square}" ng-click="rule.square = true">Square</button>
-                        <button ng-show="rule.changeShape" class="btn btn-sm btn-default" ng-class="{active: !rule.square}" ng-click="rule.square = false">Circle</button>
-                        <button class="btn btn-sm btn-default" ng-class="{active: rule.halo}" ng-click="rule.halo = !rule.halo">Halo</button>
-                        <input ng-show="rule.halo" type="color" ng-model="rule.haloColor">
-                    </div>
-                </form>
-            </div>
-        </div>
+                        <div class="col-md-12">
+                            <h4>View</h4>
+                            <form class="form-inline">
+                                <div class="form-group">
+                                    <select name="view" class="form-control" ng-model="vm.view" ng-options="vm.viewTypesEnum[id] for id in vm.viewTypes"></select>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col-md-12">
+                            <h4>Statistics</h4>
+                            <div>Files: {{vm.nodesCount}}</div>
+                            <div>Links: {{vm.linksCount}}</div>
+                        </div>
+                        <div class="col-md-12">
+                            <h4>Filters</h4>
+                            <a href ng-show="vm.getFiltersActive()" class="pull-right" style="margin-top:-30px;" ng-click="vm.resetFilters()">Reset</a>
+                            <div class="filters" ng-class="{active: vm.getFiltersActive()}">
+                                <div class="filter" ng-class="{active: vm.getFilterActive('Spreadsheets')}" ng-click="vm.toggleFilter('Spreadsheets')">Spreadsheets: {{vm.spreadsheetsCount}}</div>
+                                <div class="filter" ng-class="{active: vm.getFilterActive('Databases')}" ng-click="vm.toggleFilter('Databases')">Databases: {{vm.databasesCount}}</div>
+                            </div>
+                        </div>
+
+                  </div>
+                  <!-- /#sidebar-wrapper -->
+          
+                  <!-- Page Content -->
+                  <div id="page-content-wrapper" style="display:block;height:100%;">
+                        <div class="canvas-container" style="width:100%;height:100%;display:block;">
+                            <button class="btn btn-default" ng-click="vm.toggle()">Settings</button>
+                            <div class="canvas"></div>
+                        </div>
+                  </div>
+                  <!-- /#page-content-wrapper -->
+          
+              </div>
+              <!-- /#wrapper -->
+    <div class="col-md-5">
     </div>
     <div class="col-md-7" style="height: 100%;display:block;">
-        <div class="canvas-container" style="width:100%;height:100%;display:block;" ng-style="{'background-color': vm.style.backgroundColor}">
-            <div class="canvas"></div>
-        </div>
     </div>
     
 </div>
