@@ -123,19 +123,7 @@
     }
 }
 
-.filters{
-    cursor: pointer;
-}
-
-.filters.active{
-    color: #bbb;
-}
-
-.filters.active .filter.active{
-    color: blue;
-    text-decoration: underline;
-}
-
-.filters .filter:hover{
-    text-decoration: underline;
+.filters .chart{
+    float:left;
+    margin-right:20px;
 }

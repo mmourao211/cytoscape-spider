@@ -15,14 +15,14 @@
                                 <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
                             </form>
                         </div>
-                        <div class="col-md-12">
+                        <!-- <div class="col-md-12">
                             <h4>View</h4>
                             <form class="form-inline">
                                 <div class="form-group">
                                     <select name="view" class="form-control" ng-model="vm.view" ng-options="vm.viewTypesEnum[id] for id in vm.viewTypes"></select>
                                 </div>
                             </form>
-                        </div>
+                        </div> -->
                         <div class="col-md-12">
                             <h4>Statistics</h4>
                             <div>Files: {{vm.nodesCount}}</div>
@@ -30,10 +30,12 @@
                         </div>
                         <div class="col-md-12">
                             <h4>Filters</h4>
-                            <a href ng-show="vm.getFiltersActive()" class="pull-right" style="margin-top:-30px;" ng-click="vm.resetFilters()">Reset</a>
-                            <div class="filters" ng-class="{active: vm.getFiltersActive()}">
-                                <div class="filter" ng-class="{active: vm.getFilterActive('Spreadsheets')}" ng-click="vm.toggleFilter('Spreadsheets')">Spreadsheets: {{vm.spreadsheetsCount}}</div>
-                                <div class="filter" ng-class="{active: vm.getFilterActive('Databases')}" ng-click="vm.toggleFilter('Databases')">Databases: {{vm.databasesCount}}</div>
+                            <div class="filters">
+                                <div class="chart type-chart"><strong>Filetypes:</strong><a href ng-click="vm.typeChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                                <div class="chart exists-chart"><strong>Files Found:</strong><a href ng-click="vm.existsChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                                <div class="chart risk-chart"><strong>Risk:</strong><a href ng-click="vm.riskChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                                <div class="chart modified-date-chart"><strong>Last Modified:</strong><a href ng-click="vm.modifiedChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                                <div class="chart links-chart"><strong>Number of Links:</strong><a href ng-click="vm.linksChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
                             </div>
                         </div>
 

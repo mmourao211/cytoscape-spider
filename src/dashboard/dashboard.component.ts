@@ -52,6 +52,7 @@
  
   function DashboardController($element: JQuery,$scope: angular.IScope, $q: angular.IQService, $timeout: angular.ITimeoutService, $window: angular.IWindowService) {
     const vm = this;
+    vm.dc = dc;
     vm.nodeProperties = _.map(_.filter(NodeProperty, prop => angular.isNumber(prop)), prop=> prop);
     vm.viewTypes = _.map(_.filter(ViewType, prop => angular.isNumber(prop)), prop=> prop);
     vm.nodePropertiesEnum = NodeProperty;
@@ -65,14 +66,9 @@
     vm.propertyTypes[NodeProperty.Links] = 'Number';
     vm.propertyTypes[NodeProperty.Risk] = 'Number';
     vm.propertyTypes[NodeProperty.Exists] = 'Boolean';
-    vm.filters = {}
-    vm.getFiltersActive = () => _.some(vm.filters, filter => filter !== undefined)
-    vm.getFilterActive = (filter) => !!vm.filters[FilterType[filter]];
-    vm.toggleFilter = (filter) => vm.filters[FilterType[filter]] = !vm.filters[FilterType[filter]]; 
-    vm.resetFilters = () => _.each(_.keys(vm.filters), key => vm.filters[key] = undefined);
     vm.currentLayout = 'tree';
     vm.maxNodes = 500;
-    var dataset, dict,s;
+    var dataset, dict,s, ndx,typeDimension;
     var maxExpandedLevel;
     var levelCounters = [];
     var sizeCounters = [];
@@ -191,6 +187,118 @@
       vm.spreadsheetsCount = 0;
       drawNodesStartingAtRoot(root, convertedData, true)
       s.graph.read(convertedData)
+      
+      vm.typeChart = dc.pieChart('.type-chart');
+      ndx = crossfilter(convertedData.nodes);
+      var all = ndx.groupAll();
+      var addPercentageLabel = (graph) => {
+        graph.label(function (d) {
+          if (graph.hasFilter() && !graph.hasFilter(d.key)) {
+              return d.key + '(0%)';
+          }
+          var label = d.key;
+          if (all.value()) {
+              label += '(' + Math.floor(d.value / all.value() * 100) + '%)';
+          }
+          return label;
+        })
+      }
+      typeDimension =    ndx.dimension(function (d) {
+        return d.filetype == FileType.Databases ? 'Database' : 'Spreadsheet';
+      });
+      var typeGroup = typeDimension.group();
+      vm.typeChart /* dc.pieChart('#gain-loss-chart', 'chartGroup') */
+        .width(180)
+        .height(180)
+        .radius(80)
+        .dimension(typeDimension)
+        .group(typeGroup)
+        .on('filtered', function(){
+          refreshGraph()
+        })
+      addPercentageLabel(vm.typeChart);
+
+      var riskDimension =    ndx.dimension((d) => {
+        switch(d.riskCategory){
+          case RiskCategory.High: return 'High';
+          case RiskCategory.Medium: return 'Medium';
+          case RiskCategory.Low: return 'Low';
+          case RiskCategory.None: return 'None';
+        }
+      });
+      var riskGroup = riskDimension.group();
+      vm.riskChart = dc.pieChart('.risk-chart');
+      var riskColors = ['#000', '#0f0', '#ff0', '#f00']
+      vm.riskChart /* dc.pieChart('#gain-loss-chart', 'chartGroup') */
+        .width(180)
+        .height(180)
+        .radius(80)
+        .dimension(riskDimension)
+        .group(riskGroup)
+        .colors(riskColors)
+        .colorAccessor((g) => {
+          return (RiskCategory[g.key] as any)/riskColors.length;
+        })
+        .on('filtered', function(){
+          refreshGraph()
+        })
+        addPercentageLabel(vm.riskChart);
+                              
+        var existsDimension =    ndx.dimension(function (d) {
+          return d.exists ? 'Found' : 'Not Found';
+        });
+        var existsGroup = existsDimension.group();
+        vm.existsChart = dc.pieChart('.exists-chart');
+        vm.existsChart /* dc.pieChart('#gain-loss-chart', 'chartGroup') */
+          .width(180)
+          .height(180)
+          .radius(80)
+          .dimension(existsDimension)
+          .group(existsGroup)
+          .on('filtered', function(){
+            refreshGraph()
+          })
+          addPercentageLabel(vm.existsChart);
+
+        var dateDim = ndx.dimension(function (d) {
+          return d.modified;
+        });
+        var minDate = dateDim.bottom(1)[0].modified;
+        var maxDate = dateDim.top(1)[0].modified;
+        vm.modifiedChart = dc.barChart(".modified-date-chart")
+          .width(600)
+          .height(100)
+          .margins({top: 0, right: 50, bottom: 20, left: 40})
+          .dimension(dateDim)
+          .group(dateDim.group((date:Date)=> new Date(date.getFullYear(),date.getMonth(), date.getDate())))
+          .x(d3.time.scale().domain([minDate,maxDate]))
+          .round(d3.time.day.round)
+          .alwaysUseRounding(true)
+          .xUnits(d3.time.days)
+          .on('filtered', function(){
+            refreshGraph()
+          })
+
+          var linkDim=    ndx.dimension(function (d) {
+            return d.links;
+          });
+          var minLinks = linkDim.bottom(1)[0].links;
+          var maxLinks = linkDim.top(1)[0].links;
+          vm.linksChart = dc.barChart(".links-chart")
+            .width(600)
+            .height(100)
+            .margins({top: 0, right: 50, bottom: 20, left: 40})
+            .dimension(linkDim)
+            .group(linkDim.group())
+            .round(dc.round.floor)
+            .x(d3.scale.linear().domain([minLinks-0.5,maxLinks+0.5]))
+            .xUnits(dc.units.integers)
+            .centerBar(true)
+            .on('filtered', function(){
+              refreshGraph()
+            })
+
+          dc.renderAll();
       if(vm.currentLayout == 'fractal'){
         vm.start();
       }
@@ -260,16 +368,8 @@
       else{
         node.color = '#000';
       }
-      
-      if(vm.getFiltersActive()){
-        var tempColor = '#bbb';
-        if(vm.filters[FilterType.Databases] && node.filetype == FileType.Databases){
-          tempColor = node.color;
-        }
-        if(vm.filters[FilterType.Spreadsheets] && node.filetype == FileType.Spreadsheets){
-          tempColor = node.color;
-        }
-        node.color = tempColor;
+      if(!_.some(typeDimension.top(Infinity), filteredNode => filteredNode.id == node.id)){
+        node.color = '#bbb';
       }
     }
     var addCyDataToQueue = (convertedData, childName, parentName, whatToAdd, y?, x?, size?, ommitEdge?) => {
@@ -308,12 +408,13 @@
       }
       cyNode.data['size'] = size;
       cyNode.data['mass'] = size;
-      cyNode.data['label'] = 'XLSX';
       cyNode.data['type'] = 'customShape';
       cyNode.data['descendants'] = datasetNode.count;
       cyNode.data['links'] = datasetNode.c.length;
       cyNode.data['filetype'] = datasetNode.t;
       cyNode.data['riskCategory'] = datasetNode.rc;
+      cyNode.data['modified'] = new Date(datasetNode.md);
+      cyNode.data['exists'] = datasetNode.e;
       if (vm.currentLayout == 'tree') {
         var base = 1.1;
         var A = sizeCounters[maxExpandedLevel]/5 ;
@@ -443,6 +544,7 @@
           {
             settings:{
               edgeColor: 'target',
+              hideEdgesOnMove: true
             },
             container: element,
             type: 'canvas' // sigma.renderers.canvas works as well

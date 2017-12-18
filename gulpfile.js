@@ -45,7 +45,11 @@ gulp.task('copy', () => {
     'node_modules/sigma/build/plugins/sigma.layout.forceAtlas2.min.js',
     'node_modules/sigma/build/plugins/sigma.plugins.dragNodes.min.js',
     'node_modules/sigma/build/plugins/sigma.plugins.animate.min.js',
-    'node_modules/sigma/build/plugins/sigma.layout.noverlap.min.js'
+    'node_modules/sigma/build/plugins/sigma.layout.noverlap.min.js',
+    'node_modules/d3/d3.min.js',
+    'node_modules/crossfilter2/crossfilter.min.js',
+    'node_modules/dc/dc.css',
+    'node_modules/dc/dc.js'
   ])
   .pipe(gulp.dest('dist/vendor'));
     gulp.src([
