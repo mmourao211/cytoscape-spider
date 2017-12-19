@@ -582,9 +582,26 @@
 
       s.bind('clickNode', function(eventArgs) {
           
-        
+            $timeout(()=>vm.selectedNode = {})
+            $timeout(()=> vm.selectedNode = {
+              name: eventArgs.data.node.id, 
+              filetype: FileType[eventArgs.data.node.filetype],
+              children: dict[eventArgs.data.node.id].c,
+              riskCategory: RiskCategory[eventArgs.data.node.riskCategory]
+            }, 2000)
             api.set('content.text', 
-              $compile(`<div><button class="btn-sm btn-default" ng-click="vm.refreshAll('${eventArgs.data.node.id}')">Start from Here</button></div>`)($scope)
+              $compile(`
+                <div>
+                  <div>Name: {{vm.selectedNode.name}}<div>
+                  <div>Filetype: {{vm.selectedNode.filetype}}<div>
+                  <div>Risk Category: {{vm.selectedNode.riskCategory}}<div>
+                  <div>Links</div>
+                  <ul>
+                    <li ng-repeat="child in vm.selectedNode.children">{{child.n}}</li>
+                  </ul>
+                  <div><button class="btn-xs btn-default" ng-click="vm.refreshAll('${eventArgs.data.node.id}')">Start from Here</button></div>
+                </div>
+                `)($scope)
             );
         
             api.elements.tooltip.stop(1, 1);

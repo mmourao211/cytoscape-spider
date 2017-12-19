@@ -531,7 +531,14 @@
                 graph.qtip('hide', true);
             });
             s.bind('clickNode', function (eventArgs) {
-                api.set('content.text', $compile("<div><button class=\"btn-sm btn-default\" ng-click=\"vm.refreshAll('" + eventArgs.data.node.id + "')\">Start from Here</button></div>")($scope));
+                $timeout(function () { return vm.selectedNode = {}; });
+                $timeout(function () { return vm.selectedNode = {
+                    name: eventArgs.data.node.id,
+                    filetype: FileType[eventArgs.data.node.filetype],
+                    children: dict[eventArgs.data.node.id].c,
+                    riskCategory: RiskCategory[eventArgs.data.node.riskCategory]
+                }; }, 2000);
+                api.set('content.text', $compile("\n                <div>\n                  <div>Name: {{vm.selectedNode.name}}<div>\n                  <div>Filetype: {{vm.selectedNode.filetype}}<div>\n                  <div>Risk Category: {{vm.selectedNode.riskCategory}}<div>\n                  <div>Links</div>\n                  <ul>\n                    <li ng-repeat=\"child in vm.selectedNode.children\">{{child.n}}</li>\n                  </ul>\n                  <div><button class=\"btn-xs btn-default\" ng-click=\"vm.refreshAll('" + eventArgs.data.node.id + "')\">Start from Here</button></div>\n                </div>\n                ")($scope));
                 api.elements.tooltip.stop(1, 1);
                 api.show(eventArgs.target);
             });
