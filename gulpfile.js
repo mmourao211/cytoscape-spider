@@ -49,7 +49,9 @@ gulp.task('copy', () => {
     'node_modules/d3/d3.min.js',
     'node_modules/crossfilter2/crossfilter.min.js',
     'node_modules/dc/dc.css',
-    'node_modules/dc/dc.js'
+    'node_modules/dc/dc.js',
+    'node_modules/qtip2/dist/jquery.qtip.css',
+    'node_modules/qtip2/dist/jquery.qtip.js'
   ])
   .pipe(gulp.dest('dist/vendor'));
     gulp.src([

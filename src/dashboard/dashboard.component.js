@@ -1,5 +1,4 @@
 /// <reference path="../../node_modules/@types/angular/index.d.ts" />
-/// <reference path="../../node_modules/@types/cytoscape/index.d.ts" />
 /// <reference path="../../node_modules/@types/lodash/index.d.ts" />
 'use strict';
 (function () {
@@ -47,8 +46,8 @@
         FileType[FileType["Spreadsheets"] = 0] = "Spreadsheets";
         FileType[FileType["Databases"] = 1] = "Databases";
     })(FileType || (FileType = {}));
-    DashboardController.$inject = ['$element', '$scope', '$q', '$timeout', '$window'];
-    function DashboardController($element, $scope, $q, $timeout, $window) {
+    DashboardController.$inject = ['$element', '$scope', '$q', '$timeout', '$window', '$compile'];
+    function DashboardController($element, $scope, $q, $timeout, $window, $compile) {
         var vm = this;
         vm.dc = dc;
         vm.nodeProperties = _.map(_.filter(NodeProperty, function (prop) { return angular.isNumber(prop); }), function (prop) { return prop; });
@@ -175,6 +174,7 @@
             vm.spreadsheetsCount = 0;
             drawNodesStartingAtRoot(root, convertedData, true);
             s.graph.read(convertedData);
+            vm.filteredNodesCount = vm.nodesCount;
             vm.typeChart = dc.pieChart('.type-chart');
             ndx = crossfilter(convertedData.nodes);
             var all = ndx.groupAll();
@@ -201,7 +201,7 @@
                 .dimension(typeDimension)
                 .group(typeGroup)
                 .on('filtered', function () {
-                refreshGraph();
+                filterChangeCallback();
             });
             addPercentageLabel(vm.typeChart);
             var riskDimension = ndx.dimension(function (d) {
@@ -226,7 +226,7 @@
                 return RiskCategory[g.key] / riskColors.length;
             })
                 .on('filtered', function () {
-                refreshGraph();
+                filterChangeCallback();
             });
             addPercentageLabel(vm.riskChart);
             var existsDimension = ndx.dimension(function (d) {
@@ -241,7 +241,7 @@
                 .dimension(existsDimension)
                 .group(existsGroup)
                 .on('filtered', function () {
-                refreshGraph();
+                filterChangeCallback();
             });
             addPercentageLabel(vm.existsChart);
             var dateDim = ndx.dimension(function (d) {
@@ -260,7 +260,7 @@
                 .alwaysUseRounding(true)
                 .xUnits(d3.time.days)
                 .on('filtered', function () {
-                refreshGraph();
+                filterChangeCallback();
             });
             var linkDim = ndx.dimension(function (d) {
                 return d.links;
@@ -278,7 +278,7 @@
                 .xUnits(dc.units.integers)
                 .centerBar(true)
                 .on('filtered', function () {
-                refreshGraph();
+                filterChangeCallback();
             });
             dc.renderAll();
             if (vm.currentLayout == 'fractal') {
@@ -289,10 +289,16 @@
                 s.refresh();
             });
         };
+        var filterChangeCallback = function () {
+            vm.filteredNodesCount = typeDimension.top(Infinity).length;
+            if (!$scope.$$phase && !$scope.$root.$$phase)
+                $scope.$apply();
+            refreshGraph();
+        };
         // when both graph export json and style loaded, init cy
-        var refreshAll = function () { return $q.all([graphP(), styleP]).then(function (data) {
+        vm.refreshAll = function (id) { return $q.all([graphP(), styleP]).then(function (data) {
             initCy(data);
-            drawNodes(dataset.n);
+            drawNodes(id ? id : dataset.n);
         }); };
         var getEdgeId = function (parentName, childName) { return parentName + " to " + childName; };
         var edgeExists = function (parentName, childName) { return !!s.graph.edges(getEdgeId(parentName, childName)); };
@@ -429,7 +435,7 @@
             _.each(root.c, function (child) { return createLibraryData(child, root.n, level + 1, ancestorList + (" -" + root.n + "- ")); });
         };
         vm.draw = function () {
-            refreshAll();
+            vm.refreshAll();
         };
         var resizeCanvas = function () {
             var canvas = $element.find('.canvas');
@@ -505,7 +511,31 @@
                     }
                 ]
             });
-            sigma.plugins.dragNodes(s, s.renderers[0]);
+            var tooltip = $('.canvas').qtip({
+                id: 'canvas',
+                prerender: true,
+                content: ' ',
+                position: {
+                    target: 'mouse',
+                    viewport: $('.canvas')
+                },
+                show: false,
+                hide: {
+                    event: false,
+                    fixed: true
+                }
+            });
+            // Grab the API reference
+            var graph = $('.canvas'), api = graph.qtip();
+            s.bind('click', function () {
+                graph.qtip('hide', true);
+            });
+            s.bind('clickNode', function (eventArgs) {
+                api.set('content.text', $compile("<div><button class=\"btn-sm btn-default\" ng-click=\"vm.refreshAll('" + eventArgs.data.node.id + "')\">Start from Here</button></div>")($scope));
+                api.elements.tooltip.stop(1, 1);
+                api.show(eventArgs.target);
+            });
+            // sigma.plugins.dragNodes(s, s.renderers[0]);
             s.settings({
                 hideEdgesOnMove: true,
                 minNodeSize: 0,

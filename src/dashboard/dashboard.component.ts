@@ -1,5 +1,4 @@
 /// <reference path="../../node_modules/@types/angular/index.d.ts" />
-/// <reference path="../../node_modules/@types/cytoscape/index.d.ts" />
 /// <reference path="../../node_modules/@types/lodash/index.d.ts" />
 'use strict';
 
@@ -10,7 +9,6 @@
     controller: DashboardController,
     controllerAs: 'vm'
   });
-
 
   enum NodeProperty{
     Created,
@@ -48,9 +46,9 @@
     Databases
   }
 
-  DashboardController.$inject = ['$element','$scope', '$q', '$timeout', '$window'];
+  DashboardController.$inject = ['$element','$scope', '$q', '$timeout', '$window', '$compile'];
  
-  function DashboardController($element: JQuery,$scope: angular.IScope, $q: angular.IQService, $timeout: angular.ITimeoutService, $window: angular.IWindowService) {
+  function DashboardController($element: JQuery,$scope: angular.IScope, $q: angular.IQService, $timeout: angular.ITimeoutService, $window: angular.IWindowService, $compile: angular.ICompileService) {
     const vm = this;
     vm.dc = dc;
     vm.nodeProperties = _.map(_.filter(NodeProperty, prop => angular.isNumber(prop)), prop=> prop);
@@ -187,7 +185,7 @@
       vm.spreadsheetsCount = 0;
       drawNodesStartingAtRoot(root, convertedData, true)
       s.graph.read(convertedData)
-      
+      vm.filteredNodesCount = vm.nodesCount;
       vm.typeChart = dc.pieChart('.type-chart');
       ndx = crossfilter(convertedData.nodes);
       var all = ndx.groupAll();
@@ -214,7 +212,7 @@
         .dimension(typeDimension)
         .group(typeGroup)
         .on('filtered', function(){
-          refreshGraph()
+          filterChangeCallback()
         })
       addPercentageLabel(vm.typeChart);
 
@@ -240,7 +238,7 @@
           return (RiskCategory[g.key] as any)/riskColors.length;
         })
         .on('filtered', function(){
-          refreshGraph()
+          filterChangeCallback()
         })
         addPercentageLabel(vm.riskChart);
                               
@@ -256,7 +254,7 @@
           .dimension(existsDimension)
           .group(existsGroup)
           .on('filtered', function(){
-            refreshGraph()
+            filterChangeCallback()
           })
           addPercentageLabel(vm.existsChart);
 
@@ -276,7 +274,7 @@
           .alwaysUseRounding(true)
           .xUnits(d3.time.days)
           .on('filtered', function(){
-            refreshGraph()
+            filterChangeCallback()
           })
 
           var linkDim=    ndx.dimension(function (d) {
@@ -295,7 +293,7 @@
             .xUnits(dc.units.integers)
             .centerBar(true)
             .on('filtered', function(){
-              refreshGraph()
+              filterChangeCallback()
             })
 
           dc.renderAll();
@@ -308,10 +306,16 @@
         
       })
     }
+    var filterChangeCallback = () => {
+      vm.filteredNodesCount = typeDimension.top(Infinity).length;
+      if(!$scope.$$phase && !$scope.$root.$$phase)
+        $scope.$apply();
+      refreshGraph();
+    }
     // when both graph export json and style loaded, init cy
-    var refreshAll = () => $q.all([ graphP(), styleP ]).then(data => {
+    vm.refreshAll = (id?) => $q.all([ graphP(), styleP ]).then(data => {
       initCy(data);
-      drawNodes(dataset.n);
+      drawNodes(id ? id : dataset.n);
     });
   
     var getEdgeId = (parentName, childName) => `${parentName} to ${childName}`
@@ -372,6 +376,8 @@
         node.color = '#bbb';
       }
     }
+
+
     var addCyDataToQueue = (convertedData, childName, parentName, whatToAdd, y?, x?, size?, ommitEdge?) => {
       var child = dict[childName];
       var parent = dict[parentName];
@@ -451,7 +457,7 @@
     }
 
     vm.draw = () => {
-      refreshAll()
+      vm.refreshAll()
     } 
 
     var resizeCanvas = ()=> {
@@ -551,7 +557,41 @@
           } as any
         ]
       } as any);
-      sigma.plugins.dragNodes(s, s.renderers[0]);
+      var tooltip = $('.canvas').qtip({
+        id: 'canvas',
+        prerender: true,
+        content: ' ',
+        position: {
+          target: 'mouse',
+          viewport: $('.canvas')
+        },
+        show: false,
+        hide: {
+          event: false,
+          fixed: true
+        }
+      });
+    
+      // Grab the API reference
+      var graph = $('.canvas'),
+      api = graph.qtip() as any;
+
+      s.bind('click', function(){
+          graph.qtip('hide', true);
+      })
+
+      s.bind('clickNode', function(eventArgs) {
+          
+        
+            api.set('content.text', 
+              $compile(`<div><button class="btn-sm btn-default" ng-click="vm.refreshAll('${eventArgs.data.node.id}')">Start from Here</button></div>`)($scope)
+            );
+        
+            api.elements.tooltip.stop(1, 1);
+            api.show(eventArgs.target);
+          }
+      )
+      // sigma.plugins.dragNodes(s, s.renderers[0]);
       s.settings({
                       hideEdgesOnMove: true,
                       minNodeSize:0,
