@@ -8,32 +8,6 @@
         controller: DashboardController,
         controllerAs: 'vm'
     });
-    var NodeProperty;
-    (function (NodeProperty) {
-        NodeProperty[NodeProperty["Created"] = 0] = "Created";
-        NodeProperty[NodeProperty["Modified"] = 1] = "Modified";
-        NodeProperty[NodeProperty["Risk"] = 2] = "Risk";
-        NodeProperty[NodeProperty["Links"] = 3] = "Links";
-        NodeProperty[NodeProperty["Descendands"] = 4] = "Descendands";
-        NodeProperty[NodeProperty["Exists"] = 5] = "Exists";
-    })(NodeProperty || (NodeProperty = {}));
-    var PropertyType;
-    (function (PropertyType) {
-        PropertyType[PropertyType["Number"] = 0] = "Number";
-        PropertyType[PropertyType["Date"] = 1] = "Date";
-        PropertyType[PropertyType["Boolean"] = 2] = "Boolean";
-    })(PropertyType || (PropertyType = {}));
-    var ViewType;
-    (function (ViewType) {
-        ViewType[ViewType["Risk"] = 0] = "Risk";
-        ViewType[ViewType["Age"] = 1] = "Age";
-        ViewType[ViewType["Size"] = 2] = "Size";
-    })(ViewType || (ViewType = {}));
-    var FilterType;
-    (function (FilterType) {
-        FilterType["Spreadsheets"] = "Spreadsheets";
-        FilterType["Databases"] = "Databases";
-    })(FilterType || (FilterType = {}));
     var RiskCategory;
     (function (RiskCategory) {
         RiskCategory[RiskCategory["None"] = 0] = "None";
@@ -50,28 +24,14 @@
     function DashboardController($element, $scope, $q, $timeout, $window, $compile) {
         var vm = this;
         vm.dc = dc;
-        vm.nodeProperties = _.map(_.filter(NodeProperty, function (prop) { return angular.isNumber(prop); }), function (prop) { return prop; });
-        vm.viewTypes = _.map(_.filter(ViewType, function (prop) { return angular.isNumber(prop); }), function (prop) { return prop; });
-        vm.nodePropertiesEnum = NodeProperty;
-        vm.viewTypesEnum = ViewType;
-        vm.view = ViewType.Risk;
-        vm.propertyTypesEnum = PropertyType;
-        vm.propertyTypes = [];
-        vm.propertyTypes[NodeProperty.Created] = 'Date';
-        vm.propertyTypes[NodeProperty.Modified] = 'Date';
-        vm.propertyTypes[NodeProperty.Descendands] = 'Number';
-        vm.propertyTypes[NodeProperty.Links] = 'Number';
-        vm.propertyTypes[NodeProperty.Risk] = 'Number';
-        vm.propertyTypes[NodeProperty.Exists] = 'Boolean';
         vm.currentLayout = 'tree';
-        vm.maxNodes = 500;
-        var dataset, dict, s, ndx, typeDimension;
+        vm.maxNodes = 10000;
+        var dataset, dict, s, ndx, typeDimension, nodesInFilteredSet;
         var maxExpandedLevel;
         var levelCounters = [];
         var sizeCounters = [];
         var totalCount = 0;
         var startingLevel = 1;
-        $scope.$watch(function () { return [vm.filters, vm.view]; }, function () { return s && refreshGraph(); }, true);
         var refreshGraph = function () {
             s.refresh();
             s.refresh();
@@ -84,12 +44,6 @@
             type: 'GET',
             dataType: 'json'
         }); };
-        // also get style via ajax
-        var styleP = $.ajax({
-            url: 'http://www.wineandcheesemap.com/style.cycss',
-            type: 'GET',
-            dataType: 'text'
-        });
         var doesNodeAlreadyExist = function (id) { return !!s.graph.nodes(id); };
         var drawNodesStartingAtRoot = function (root, convertedData, ommitStartingEdge) {
             var nodeAlreadyExists = doesNodeAlreadyExist(root.n);
@@ -136,7 +90,7 @@
                 childName = root.n;
             }
             s.graph.read(convertedData);
-            s.refresh();
+            refreshGraph();
         };
         vm.stop = function () {
             s.stopForceAtlas2();
@@ -164,6 +118,7 @@
             sizeCounters = [];
             totalCount = 0;
             startingLevel = root.level;
+            nodesInFilteredSet = undefined;
             populateLevelCounts(root);
             maxExpandedLevel = getMaxExpandedLevel();
             getY(root);
@@ -290,13 +245,18 @@
             });
         };
         var filterChangeCallback = function () {
-            vm.filteredNodesCount = typeDimension.top(Infinity).length;
+            var filteredNodes = typeDimension.top(Infinity);
+            vm.filteredNodesCount = filteredNodes.length;
+            nodesInFilteredSet = _.keyBy(filteredNodes, 'id');
+            _.each(s.graph.nodes(), function (node) {
+                assignNodeColor(node);
+            });
             if (!$scope.$$phase && !$scope.$root.$$phase)
                 $scope.$apply();
             refreshGraph();
         };
         // when both graph export json and style loaded, init cy
-        vm.refreshAll = function (id) { return $q.all([graphP(), styleP]).then(function (data) {
+        vm.refreshAll = function (id) { return $q.all([graphP()]).then(function (data) {
             initCy(data);
             drawNodes(id ? id : dataset.n);
         }); };
@@ -337,25 +297,20 @@
             return self.y;
         };
         var assignNodeColor = function (node) {
-            if (vm.view == ViewType.Risk) {
-                switch (node.riskCategory) {
-                    case RiskCategory.High:
-                        node.color = '#f00';
-                        break;
-                    case RiskCategory.Medium:
-                        node.color = '#ff0';
-                        break;
-                    case RiskCategory.Low:
-                        node.color = '#0f0';
-                        break;
-                    default:
-                        node.color = '#000';
-                }
+            switch (node.riskCategory) {
+                case RiskCategory.High:
+                    node.color = '#f00';
+                    break;
+                case RiskCategory.Medium:
+                    node.color = '#ff0';
+                    break;
+                case RiskCategory.Low:
+                    node.color = '#0f0';
+                    break;
+                default:
+                    node.color = '#000';
             }
-            else {
-                node.color = '#000';
-            }
-            if (!_.some(typeDimension.top(Infinity), function (filteredNode) { return filteredNode.id == node.id; })) {
+            if (nodesInFilteredSet && !nodesInFilteredSet[node.id]) {
                 node.color = '#bbb';
             }
         };
@@ -395,13 +350,14 @@
             }
             cyNode.data['size'] = size;
             cyNode.data['mass'] = size;
-            cyNode.data['type'] = 'customShape';
             cyNode.data['descendants'] = datasetNode.count;
             cyNode.data['links'] = datasetNode.c.length;
             cyNode.data['filetype'] = datasetNode.t;
             cyNode.data['riskCategory'] = datasetNode.rc;
             cyNode.data['modified'] = new Date(datasetNode.md);
             cyNode.data['exists'] = datasetNode.e;
+            cyNode.data['type'] = datasetNode.t == FileType.Databases ? 'square' : 'def';
+            assignNodeColor(cyNode.data);
             if (vm.currentLayout == 'tree') {
                 var base = 1.1;
                 var A = sizeCounters[maxExpandedLevel] / 5;
@@ -447,69 +403,18 @@
         $($window).resize(resizeCanvas);
         function initCy(then) {
             dataset = then[0];
-            var styleJson = then[1];
             dict = {};
             createLibraryData(dataset, null, null, '');
             killAll();
             var element = $element.find('.canvas')[0];
-            sigma.canvas.edges.def = function (edge, source, target, context, settings) {
-                var color = edge.color, prefix = settings('prefix') || '', size = edge[prefix + 'size'] || 1, edgeColor = settings('edgeColor'), defaultNodeColor = settings('defaultNodeColor'), defaultEdgeColor = settings('defaultEdgeColor');
-                if (!color)
-                    switch (edgeColor) {
-                        case 'source':
-                            color = source.color || defaultNodeColor;
-                            break;
-                        case 'target':
-                            color = target.color || defaultNodeColor;
-                            break;
-                        default:
-                            color = defaultEdgeColor;
-                            break;
-                    }
-                context.strokeStyle = color;
-                context.lineWidth = size;
-                context.beginPath();
-                context.moveTo(source[prefix + 'x'], source[prefix + 'y']);
-                context.lineTo(target[prefix + 'x'], target[prefix + 'y']);
-                context.stroke();
-            };
-            sigma.canvas.nodes.customShape = function (node, context, settings) {
-                var prefix = (settings && settings('prefix')) || '', size = node[prefix + 'size'], shape = (node.filetype == FileType.Databases ? 'square' : 'circle'), halo, haloColor;
-                assignNodeColor(node);
-                context.fillStyle = node.color;
-                context.beginPath();
-                if (shape == 'circle') {
-                    drawCircle(context, node, prefix);
-                }
-                else
-                    drawSquare(context, node, prefix);
-                context.closePath();
-                context.fill();
-                if (halo) {
-                    var previousCompositeOperation = context.globalCompositeOperation;
-                    context.globalCompositeOperation = 'destination-over';
-                    context.fillStyle = haloColor ? haloColor : '#fff';
-                    context.beginPath();
-                    if (shape == 'circle')
-                        drawCircle(context, node, prefix, 2);
-                    else
-                        drawSquare(context, node, prefix, 2);
-                    context.closePath();
-                    context.fill();
-                    context.globalCompositeOperation = previousCompositeOperation;
-                }
-            };
             s = new sigma({
-                renderers: [
-                    {
+                renderers: [{
+                        container: element,
                         settings: {
                             edgeColor: 'target',
-                            hideEdgesOnMove: true
-                        },
-                        container: element,
-                        type: 'canvas' // sigma.renderers.canvas works as well
-                    }
-                ]
+                            hideEdgesOnMove: true,
+                        }
+                    }]
             });
             var tooltip = $('.canvas').qtip({
                 id: 'canvas',
@@ -549,19 +454,10 @@
                 maxNodeSize: 0,
                 minEdgeSize: 0,
                 maxEdgeSize: 0,
-                zoomMax: 10,
-                zoomMin: 0.0001
+                zoomMax: 100,
+                zoomMin: 0.00001
             });
         }
-        var drawCircle = function (context, node, prefix, ratio) {
-            if (ratio === void 0) { ratio = 1; }
-            context.arc(node[prefix + 'x'], node[prefix + 'y'], ratio * node[prefix + 'size'], 0, Math.PI * 2, true);
-        };
-        var drawSquare = function (context, node, prefix, ratio) {
-            if (ratio === void 0) { ratio = 1; }
-            var size = node[prefix + 'size'];
-            context.rect(node[prefix + 'x'] - ratio * size, node[prefix + 'y'] - ratio * size, size * 2 * ratio, size * 2 * ratio);
-        };
         vm.toggle = function () {
             vm.toggled = !vm.toggled;
             $timeout(resizeCanvas, 1000);
@@ -573,6 +469,75 @@
                 s = undefined;
             }
         }
+        sigma['webgl'].nodes.square = angular.extend({}, sigma['webgl'].nodes.def, {
+            initProgram: function (gl) {
+                var vertexShader, fragmentShader, program;
+                vertexShader = sigma['utils'].loadShader(gl, [
+                    'attribute vec2 a_position;',
+                    'attribute float a_size;',
+                    'attribute float a_color;',
+                    'attribute float a_angle;',
+                    'uniform vec2 u_resolution;',
+                    'uniform float u_ratio;',
+                    'uniform float u_scale;',
+                    'uniform mat3 u_matrix;',
+                    'varying vec4 color;',
+                    'varying vec2 center;',
+                    'varying float radius;',
+                    'void main() {',
+                    // Multiply the point size twice:
+                    'radius = a_size * u_ratio;',
+                    // Scale from [[-1 1] [-1 1]] to the container:
+                    'vec2 position = (u_matrix * vec3(a_position, 1)).xy;',
+                    // 'center = (position / u_resolution * 2.0 - 1.0) * vec2(1, -1);',
+                    'center = position * u_scale;',
+                    'center = vec2(center.x, u_scale * u_resolution.y - center.y);',
+                    'position = position +',
+                    '4.0 * radius * vec2(cos(a_angle), sin(a_angle));',
+                    'position = (position / u_resolution * 2.0 - 1.0) * vec2(1, -1);',
+                    'radius = radius * u_scale;',
+                    'gl_Position = vec4(position, 0, 1);',
+                    // Extract the color:
+                    'float c = a_color;',
+                    'color.b = mod(c, 256.0); c = floor(c / 256.0);',
+                    'color.g = mod(c, 256.0); c = floor(c / 256.0);',
+                    'color.r = mod(c, 256.0); c = floor(c / 256.0); color /= 255.0;',
+                    'color.a = 1.0;',
+                    '}'
+                ].join('\n'), gl.VERTEX_SHADER);
+                fragmentShader = sigma['utils'].loadShader(gl, [
+                    'precision mediump float;',
+                    'varying vec4 color;',
+                    'varying vec2 center;',
+                    'varying float radius;',
+                    'void main(void) {',
+                    'vec4 color0 = vec4(0.0, 0.0, 0.0, 0.0);',
+                    'vec2 m = gl_FragCoord.xy - center;',
+                    // Here is how we draw a disc instead of a square:
+                    'if (m.x < radius && m.x > -radius && m.y < radius && m.y > -radius)',
+                    'gl_FragColor = color;',
+                    'else',
+                    'gl_FragColor = color0;',
+                    '}'
+                ].join('\n'), gl.FRAGMENT_SHADER);
+                program = sigma['utils'].loadProgram(gl, [vertexShader, fragmentShader]);
+                return program;
+            }
+        });
+        var drawSquare = function (context, node, prefix, ratio) {
+            if (ratio === void 0) { ratio = 1; }
+            var size = node[prefix + 'size'];
+            context.rect(node[prefix + 'x'] - ratio * size, node[prefix + 'y'] - ratio * size, size * 2 * ratio, size * 2 * ratio);
+        };
+        sigma.canvas.nodes.square = function (node, context, settings) {
+            var prefix = (settings && settings('prefix')) || '', size = node[prefix + 'size'];
+            assignNodeColor(node);
+            context.fillStyle = node.color;
+            context.beginPath();
+            drawSquare(context, node, prefix);
+            context.closePath();
+            context.fill();
+        };
     }
 })();
 //# sourceMappingURL=dashboard.component.js.map
