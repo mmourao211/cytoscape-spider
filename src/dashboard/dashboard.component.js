@@ -25,16 +25,24 @@
         var vm = this;
         vm.dc = dc;
         vm.currentLayout = 'tree';
-        vm.maxNodes = 10000;
         var dataset, dict, s, ndx, typeDimension, nodesInFilteredSet;
-        var maxExpandedLevel;
         var levelCounters = [];
         var sizeCounters = [];
         var totalCount = 0;
         var startingLevel = 1;
+        function focusNode(node) {
+            sigma.misc.animation.camera(s.camera, {
+                x: node['read_cammain:x'],
+                y: node['read_cammain:y'],
+                ratio: 1
+            }, {
+                duration: 150
+            });
+        }
         var refreshGraph = function () {
             s.refresh();
             s.refresh();
+            // s.graph.nodes()[0] && focusNode(s.graph.nodes()[0])
         };
         // get exported json from cytoscape desktop via ajax
         var graphP = function () { return $.ajax({
@@ -50,7 +58,7 @@
             if (!nodeAlreadyExists) {
                 var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName, 'child', undefined, undefined, undefined, ommitStartingEdge);
             }
-            if (root.level != maxExpandedLevel && root.c.length)
+            if (root.c.length)
                 for (var i = 0; i < root.c.length; i++) {
                     drawNodesStartingAtRoot(root.c[i], convertedData, false);
                 }
@@ -63,34 +71,17 @@
                 for (var i = 0; i < root.c.length; i++)
                     populateLevelCounts(root.c[i]);
         };
-        var getMaxExpandedLevel = function () {
-            var s = 0;
-            var j;
-            for (var i = 0; i < levelCounters.length; i++) {
-                var levelCount = levelCounters[i] ? levelCounters[i] : 0;
-                s += levelCount;
-                if (s < vm.maxNodes)
-                    j = i;
-                else
-                    break;
-            }
-            return j;
+        var getMaxLevel = function () {
+            return levelCounters.length - 1;
         };
         var drawUpwards = function (root) {
             var first = root;
-            var convertedData = { nodes: [], edges: [] };
+            vm.breadcrumbs = [root.n];
             var childName;
-            var initialSize = getSize(root);
-            var A = Math.max(sizeCounters[maxExpandedLevel] / 5, 2 * initialSize);
-            var x = -A;
             while (root.parentName) {
                 root = dict[root.parentName];
-                addCyDataToQueue(convertedData, childName, root.n, 'parent', first.y, x, initialSize, true);
-                x -= A;
-                childName = root.n;
+                vm.breadcrumbs.unshift(root.n);
             }
-            s.graph.read(convertedData);
-            refreshGraph();
         };
         vm.stop = function () {
             s.stopForceAtlas2();
@@ -120,7 +111,6 @@
             startingLevel = root.level;
             nodesInFilteredSet = undefined;
             populateLevelCounts(root);
-            maxExpandedLevel = getMaxExpandedLevel();
             getY(root);
             drawUpwards(root);
             vm.nodesCount = 0;
@@ -241,7 +231,7 @@
             }
             $timeout(function () {
                 resizeCanvas();
-                s.refresh();
+                refreshGraph();
             });
         };
         var filterChangeCallback = function () {
@@ -269,7 +259,7 @@
             if (!sizeCounters[self.level])
                 sizeCounters[self.level] = 0;
             self.size = getSize(self);
-            if (self.level == maxExpandedLevel) {
+            if (self.level == getMaxLevel()) {
                 sizeCounters[self.level] += self.size + 10;
                 self.y = sizeCounters[self.level] - self.size / 2;
             }
@@ -288,7 +278,7 @@
                     sizeCounters[self.level] = last.y + last.size / 2 + 10;
                 }
                 else {
-                    for (var j = self.level; j < maxExpandedLevel + 1; j++) {
+                    for (var j = self.level; j < getMaxLevel() + 1; j++) {
                         sizeCounters[self.level] += self.size + 10;
                     }
                     self.y = sizeCounters[self.level] - self.size / 2;
@@ -327,15 +317,13 @@
                 position: null,
                 style: null
             };
-            if (datasetNode.level < maxExpandedLevel && datasetNode.level >= startingLevel)
-                cyNode.data.expandable = true;
             convertedData.nodes.push(cyNode.data);
             vm.nodesCount++;
             if (datasetNode.t == FileType.Databases)
                 vm.databasesCount++;
             else
                 vm.spreadsheetsCount++;
-            if (parent && child && !edgeExists(parentName, childName)) {
+            if (parentName && !ommitEdge && !edgeExists(parentName, childName)) {
                 var edge = {
                     data: {
                         id: getEdgeId(parentName, childName),
@@ -349,7 +337,7 @@
                 vm.linksCount++;
             }
             cyNode.data['size'] = size;
-            cyNode.data['mass'] = size;
+            cyNode.data['mass'] = whatToAdd == 'child' ? size : 0;
             cyNode.data['descendants'] = datasetNode.count;
             cyNode.data['links'] = datasetNode.c.length;
             cyNode.data['filetype'] = datasetNode.t;
@@ -360,13 +348,13 @@
             assignNodeColor(cyNode.data);
             if (vm.currentLayout == 'tree') {
                 var base = 1.1;
-                var A = sizeCounters[maxExpandedLevel] / 5;
-                var newMaxExpandedLevel = maxExpandedLevel - startingLevel + 1;
+                var A = sizeCounters[getMaxLevel()] / 5;
+                var newMaxLevel = getMaxLevel() - startingLevel + 1;
                 var newLevel = datasetNode.level - startingLevel + 1;
-                var X = A / (Math.pow(base, newMaxExpandedLevel - 1) - 1);
+                var X = A / (Math.pow(base, newMaxLevel - 1) - 0.999);
                 cyNode.position = {
                     x: y !== undefined ? y : datasetNode.y,
-                    y: x !== undefined ? x : Math.pow(base, newMaxExpandedLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
+                    y: x !== undefined ? x : Math.pow(base, newMaxLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
                 };
             }
             cyNode.data.x = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
@@ -443,7 +431,7 @@
                     children: dict[eventArgs.data.node.id].c,
                     riskCategory: RiskCategory[eventArgs.data.node.riskCategory]
                 }; }, 2000);
-                api.set('content.text', $compile("\n                <div>\n                  <div>Name: {{vm.selectedNode.name}}<div>\n                  <div>Filetype: {{vm.selectedNode.filetype}}<div>\n                  <div>Risk Category: {{vm.selectedNode.riskCategory}}<div>\n                  <div>Links</div>\n                  <ul>\n                    <li ng-repeat=\"child in vm.selectedNode.children\">{{child.n}}</li>\n                  </ul>\n                  <div><button class=\"btn-xs btn-default\" ng-click=\"vm.refreshAll('" + eventArgs.data.node.id + "')\">Start from Here</button></div>\n                </div>\n                ")($scope));
+                api.set('content.text', $compile("\n                <div>\n                  <div><button class=\"btn-xs btn-default\" ng-click=\"vm.refreshAll('" + eventArgs.data.node.id + "')\">Start from Here</button></div>\n                  <div>Name: {{vm.selectedNode.name}}<div>\n                  <div>Filetype: {{vm.selectedNode.filetype}}<div>\n                  <div>Risk Category: {{vm.selectedNode.riskCategory}}<div>\n                  <div>Links</div>\n                  <ul>\n                    <li ng-repeat=\"child in vm.selectedNode.children\">{{child.n}}</li>\n                  </ul>\n                </div>\n                ")($scope));
                 api.elements.tooltip.stop(1, 1);
                 api.show(eventArgs.target);
             });

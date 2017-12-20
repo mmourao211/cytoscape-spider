@@ -9,9 +9,6 @@
                             <form class="form-inline">
                                 <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
                                 <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
-                                <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
-                                <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
-                                <div class="form-group"> <input class="form-control" type="number" ng-model="vm.maxNodes" /></div>
                                 <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
                             </form>
                         </div>
@@ -45,6 +42,13 @@
                   <div id="page-content-wrapper" style="display:block;height:100%;">
                         <div class="canvas-container" style="width:100%;height:100%;display:block;">
                             <button class="btn btn-default" ng-click="vm.toggle()">Settings</button>
+                            <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
+                            <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
+                            <span ng-repeat="bc in vm.breadcrumbs">
+                                <a href ng-show="!$last" ng-click="vm.refreshAll(bc)">{{bc}}</a>
+                                <span ng-show="!$last">&gt;</span>
+                                <span ng-show="$last">{{bc}}</span>
+                            </span>
                             <div class="canvas"></div>
                         </div>
                   </div>
@@ -52,9 +56,5 @@
           
               </div>
               <!-- /#wrapper -->
-    <div class="col-md-5">
-    </div>
-    <div class="col-md-7" style="height: 100%;display:block;">
-    </div>
     
 </div>
