@@ -323,7 +323,7 @@
           node.color = '#000';
       }
       if(nodesInFilteredSet && !nodesInFilteredSet[node.id]){
-        node.color = '#bbb';
+        node.color = '#f2f2f2';
       }
     }
 
