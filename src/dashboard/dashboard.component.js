@@ -32,19 +32,9 @@
         var startingLevel = 1;
         vm.xFactor = 1;
         vm.yFactor = 1;
-        function focusNode(node) {
-            sigma.misc.animation.camera(s.camera, {
-                x: node['read_cammain:x'],
-                y: node['read_cammain:y'],
-                ratio: 1
-            }, {
-                duration: 150
-            });
-        }
         var refreshGraph = function () {
             s.refresh();
             s.refresh();
-            // s.graph.nodes()[0] && focusNode(s.graph.nodes()[0])
         };
         // get exported json from cytoscape desktop via ajax
         var graphP = function () { return $.ajax({
@@ -58,7 +48,7 @@
         var drawNodesStartingAtRoot = function (root, convertedData, ommitStartingEdge) {
             var nodeAlreadyExists = doesNodeAlreadyExist(root.n);
             if (!nodeAlreadyExists) {
-                var nodeToAdd = addCyDataToQueue(convertedData, root.n, root.parentName, 'child', undefined, undefined, undefined, ommitStartingEdge);
+                addCyDataToQueue(convertedData, root.n, root.parentName, ommitStartingEdge);
             }
             if (root.c.length)
                 for (var i = 0; i < root.c.length; i++) {
@@ -117,8 +107,6 @@
             drawUpwards(root);
             vm.nodesCount = 0;
             vm.linksCount = 0;
-            vm.databasesCount = 0;
-            vm.spreadsheetsCount = 0;
             vm.factorChanged = function () {
                 if (s) {
                     _.each(s.graph.nodes(), function (node) {
@@ -315,64 +303,56 @@
                 node.color = '#f2f2f2';
             }
         };
-        var addCyDataToQueue = function (convertedData, childName, parentName, whatToAdd, y, x, size, ommitEdge) {
+        var addCyDataToQueue = function (convertedData, childName, parentName, ommitEdge) {
             var child = dict[childName];
             var parent = dict[parentName];
-            var datasetNode = whatToAdd == 'parent' ? parent : child;
-            size = size !== undefined ? size : getSize(datasetNode);
-            var cyNode = {
-                data: {
-                    id: datasetNode.n,
-                    ancestors: datasetNode.ancestorList
-                },
-                position: null,
-                style: null
+            var datasetNode = child;
+            var size = getSize(datasetNode);
+            var node = {
+                id: datasetNode.n,
+                size: Math.max(size, 1),
+                mass: size,
+                descendants: datasetNode.count,
+                links: datasetNode.c.length,
+                filetype: datasetNode.t,
+                riskCategory: datasetNode.rc,
+                modified: new Date(datasetNode.md),
+                exists: datasetNode.e,
+                type: datasetNode.t == FileType.Databases ? 'square' : 'def',
+                realX: null,
+                realY: null,
+                x: null,
+                y: null
             };
-            convertedData.nodes.push(cyNode.data);
+            assignNodeColor(node);
+            convertedData.nodes.push(node);
             vm.nodesCount++;
-            if (datasetNode.t == FileType.Databases)
-                vm.databasesCount++;
-            else
-                vm.spreadsheetsCount++;
             if (parentName && !ommitEdge && !edgeExists(parentName, childName)) {
                 var edge = {
-                    data: {
-                        id: getEdgeId(parentName, childName),
-                        source: parent.n,
-                        target: child.n,
-                        size: ommitEdge ? 10 : getSize(child) / 4,
-                        weight: ommitEdge ? 10 : getSize(child) / 4
-                    }
+                    id: getEdgeId(parentName, childName),
+                    source: parent.n,
+                    target: child.n,
+                    size: size / 4,
+                    weight: size / 4
                 };
-                convertedData.edges.push(edge.data);
+                convertedData.edges.push(edge);
                 vm.linksCount++;
             }
-            cyNode.data['size'] = Math.max(size, 1);
-            cyNode.data['mass'] = whatToAdd == 'child' ? size : 0;
-            cyNode.data['descendants'] = datasetNode.count;
-            cyNode.data['links'] = datasetNode.c.length;
-            cyNode.data['filetype'] = datasetNode.t;
-            cyNode.data['riskCategory'] = datasetNode.rc;
-            cyNode.data['modified'] = new Date(datasetNode.md);
-            cyNode.data['exists'] = datasetNode.e;
-            cyNode.data['type'] = datasetNode.t == FileType.Databases ? 'square' : 'def';
-            assignNodeColor(cyNode.data);
             if (vm.currentLayout == 'tree') {
                 var base = 1.1;
                 var A = sizeCounters[getMaxLevel()] / 5;
                 var newMaxLevel = getMaxLevel() - startingLevel + 1;
                 var newLevel = datasetNode.level - startingLevel + 1;
                 var X = A / (Math.pow(base, newMaxLevel - 1) - 0.999);
-                cyNode.position = {
-                    x: y !== undefined ? y : datasetNode.y,
-                    y: x !== undefined ? x : Math.pow(base, newMaxLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
-                };
+                node.realX = datasetNode.y;
+                node.realY = Math.pow(base, newMaxLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1);
+                node.x = vm.xFactor * node.realX;
+                node.y = vm.yFactor * node.realY;
             }
-            cyNode.data.realX = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
-            cyNode.data.x = vm.currentLayout == 'tree' ? vm.xFactor * cyNode.position.x : Math.random();
-            cyNode.data.realY = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
-            cyNode.data.y = vm.currentLayout == 'tree' ? vm.yFactor * cyNode.position.y : Math.random();
-            return cyNode;
+            else {
+                node.x = Math.random();
+                node.y = Math.random();
+            }
         };
         var getChildrenCount = function (parent) {
             if (!parent.count)
