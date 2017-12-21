@@ -1,60 +1,61 @@
 
 <div style="width: 100%;height:100%;">
-              <div id="wrapper" ng-class="{toggled: vm.toggled}" style="height:100%;">
-          
-                  <!-- Sidebar -->
-                  <div id="sidebar-wrapper">
-                        <div class="col-md-12">
-                            <h4>Diagram Type</h4>
-                            <form class="form-inline">
-                                <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
-                                <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
-                                <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
-                            </form>
-                        </div>
-                        <!-- <div class="col-md-12">
-                            <h4>View</h4>
-                            <form class="form-inline">
-                                <div class="form-group">
-                                    <select name="view" class="form-control" ng-model="vm.view" ng-options="vm.viewTypesEnum[id] for id in vm.viewTypes"></select>
-                                </div>
-                            </form>
-                        </div> -->
-                        <div class="col-md-12">
-                            <h4>Statistics</h4>
-                            <div>Files: {{vm.nodesCount}} ({{vm.filteredNodesCount}})</div>
-                        </div>
-                        <div class="col-md-12">
-                            <h4>Filters</h4>
-                            <div class="filters">
-                                <div class="chart type-chart"><strong>Filetypes:</strong><a href ng-click="vm.typeChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
-                                <div class="chart exists-chart"><strong>Files Found:</strong><a href ng-click="vm.existsChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
-                                <div class="chart risk-chart"><strong>Risk:</strong><a href ng-click="vm.riskChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
-                                <div class="chart modified-date-chart"><strong>Last Modified:</strong><a href ng-click="vm.modifiedChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
-                                <div class="chart links-chart"><strong>Number of Links:</strong><a href ng-click="vm.linksChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
-                            </div>
-                        </div>
+    <div id="wrapper" ng-class="{toggled: vm.toggled}">
+        
+        <!-- Sidebar -->
+        <div id="sidebar-wrapper">
+            <button class="btn btn-default pull-right" ng-click="vm.toggle()"><i class="fa fa-bars"></i></button>
+            <div ng-show="!vm.toggled">
+                <div class="col-md-12">
+                    <h4>Diagram Type</h4>
+                    <form class="form-inline">
+                        <button ng-click="vm.currentLayout = 'tree'" ng-class="{active: vm.currentLayout == 'tree'}" class="btn btn-default">Tree</button>
+                        <button ng-click="vm.currentLayout = 'fractal'" ng-class="{active: vm.currentLayout == 'fractal'}" class="btn btn-default">Force</button>
+                        <button ng-click="vm.draw()" class="btn btn-primary">Draw</button>
+                    </form>
+                </div>
+                <div class="col-md-12">
+                    <h4>Statistics</h4>
+                    <div>Files: {{vm.nodesCount}} ({{vm.filteredNodesCount}})</div>
+                </div>
+                <div class="col-md-12">
+                    <h4>Filters</h4>
+                    <div class="filters">
+                        <div class="chart type-chart"><strong>Filetypes:</strong><a href ng-click="vm.typeChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                        <div class="chart exists-chart"><strong>Files Found:</strong><a href ng-click="vm.existsChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                        <div class="chart risk-chart"><strong>Risk:</strong><a href ng-click="vm.riskChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                        <div class="chart modified-date-chart"><strong>Last Modified:</strong><a href ng-click="vm.modifiedChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                        <div class="chart links-chart"><strong>Number of Links:</strong><a href ng-click="vm.linksChart.filterAll();vm.dc.redrawAll();" style="float:right;">Reset</a><div class="clearfix"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /#sidebar-wrapper -->
 
-                  </div>
-                  <!-- /#sidebar-wrapper -->
+        <!-- Page Content -->
+        <div id="page-content-wrapper" style="display:block;height:100%;">
+            <div class="canvas-container" style="width:100%;height:100%;display:block;">
+                <form class="form-inline" style="position:absolute;bottom:20px;right:20px;z-index:9999;" ng-show="vm.currentLayout == 'tree'">
+                    <div class="form-group">
+                        <label>X-scale</label>
+                        <input type="number" ng-class="form-control" ng-model="vm.xFactor" ng-change="vm.factorChanged()" step="0.01">
+                        <label>Y-scale</label>
+                        <input type="number" ng-class="form-control" ng-model="vm.yFactor" ng-change="vm.factorChanged()" step="0.1">
+                    </div>
+                </form>
+                <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
+                <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
+                <span ng-repeat="bc in vm.breadcrumbs">
+                    <a href ng-show="!$last" ng-click="vm.refreshAll(bc)">{{bc}}</a>
+                    <span ng-show="!$last">&gt;</span>
+                    <span ng-show="$last">{{bc}}</span>
+                </span>
+                <div class="canvas"></div>
+            </div>
+        </div>
+        <!-- /#page-content-wrapper -->
           
-                  <!-- Page Content -->
-                  <div id="page-content-wrapper" style="display:block;height:100%;">
-                        <div class="canvas-container" style="width:100%;height:100%;display:block;">
-                            <button class="btn btn-default" ng-click="vm.toggle()">Settings</button>
-                            <button ng-click="vm.stop()" ng-show="vm.started === true" class="btn btn-default">Stop Layout</button>
-                            <button ng-click="vm.start()" ng-show="vm.started === false" class="btn btn-default">Start Layout</button>
-                            <span ng-repeat="bc in vm.breadcrumbs">
-                                <a href ng-show="!$last" ng-click="vm.refreshAll(bc)">{{bc}}</a>
-                                <span ng-show="!$last">&gt;</span>
-                                <span ng-show="$last">{{bc}}</span>
-                            </span>
-                            <div class="canvas"></div>
-                        </div>
-                  </div>
-                  <!-- /#page-content-wrapper -->
-          
-              </div>
-              <!-- /#wrapper -->
+    </div>
+    <!-- /#wrapper -->
     
 </div>

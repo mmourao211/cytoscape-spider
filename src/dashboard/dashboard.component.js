@@ -30,6 +30,8 @@
         var sizeCounters = [];
         var totalCount = 0;
         var startingLevel = 1;
+        vm.xFactor = 1;
+        vm.yFactor = 1;
         function focusNode(node) {
             sigma.misc.animation.camera(s.camera, {
                 x: node['read_cammain:x'],
@@ -117,6 +119,15 @@
             vm.linksCount = 0;
             vm.databasesCount = 0;
             vm.spreadsheetsCount = 0;
+            vm.factorChanged = function () {
+                if (s) {
+                    _.each(s.graph.nodes(), function (node) {
+                        node.x = node.realX * vm.xFactor;
+                        node.y = node.realY * vm.yFactor;
+                    });
+                    refreshGraph();
+                }
+            };
             drawNodesStartingAtRoot(root, convertedData, true);
             s.graph.read(convertedData);
             vm.filteredNodesCount = vm.nodesCount;
@@ -336,7 +347,7 @@
                 convertedData.edges.push(edge.data);
                 vm.linksCount++;
             }
-            cyNode.data['size'] = size;
+            cyNode.data['size'] = Math.max(size, 1);
             cyNode.data['mass'] = whatToAdd == 'child' ? size : 0;
             cyNode.data['descendants'] = datasetNode.count;
             cyNode.data['links'] = datasetNode.c.length;
@@ -357,8 +368,10 @@
                     y: x !== undefined ? x : Math.pow(base, newMaxLevel - newLevel) * X * (Math.pow(base, newLevel - 1) - 1)
                 };
             }
-            cyNode.data.x = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
-            cyNode.data.y = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
+            cyNode.data.realX = vm.currentLayout == 'tree' ? cyNode.position.x : Math.random();
+            cyNode.data.x = vm.currentLayout == 'tree' ? vm.xFactor * cyNode.position.x : Math.random();
+            cyNode.data.realY = vm.currentLayout == 'tree' ? cyNode.position.y : Math.random();
+            cyNode.data.y = vm.currentLayout == 'tree' ? vm.yFactor * cyNode.position.y : Math.random();
             return cyNode;
         };
         var getChildrenCount = function (parent) {
@@ -384,7 +397,7 @@
         var resizeCanvas = function () {
             var canvas = $element.find('.canvas');
             var container = $element.find('.canvas-container');
-            var width = vm.toggled ? container.width() : container.width() + 1024;
+            var width = (vm.toggled ? container.width() + 37 : container.width() + 700) - 50;
             canvas.height(container.height());
             canvas.width(width);
         };

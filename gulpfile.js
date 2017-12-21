@@ -3,7 +3,6 @@ const babel = require('gulp-babel');
 const browserSync = require('browser-sync').create();
 const historyApiFallback = require('connect-history-api-fallback');
 const concat = require('gulp-concat');
-const sass = require('gulp-sass');
 const watch = require('gulp-watch');
 
 const karma = require('karma');
@@ -25,27 +24,10 @@ gulp.task('copy', () => {
     'node_modules/bootstrap/dist/js/bootstrap.min.js',
     'node_modules/jquery/dist/jquery.min.js',
     'node_modules/lodash/lodash.min.js',
-    'node_modules/cytoscape/dist/cytoscape.js',
-    'node_modules/qtip/qtip.min.js',
-    'node_modules/qtip/css/qtip.css',
-    'node_modules/qtip/css/theme.css',
-    'node_modules/require/require.min.js',
-    'node_modules/typeahead/typeahead.js',
-    'node_modules/cytoscape-cose-bilkent/cytoscape-cose-bilkent.js',
-    'node_modules/weaverjs/dist/weaver.js',
-    'node_modules/cytoscape-spread/cytoscape-spread.js',
-    'node_modules/webcola/WebCola/cola.min.js',
-    'node_modules/cytoscape-cola/cytoscape-cola.js',
-    'node_modules/dagre/dist/dagre.min.js',
-    'node_modules/cytoscape-dagre/cytoscape-dagre.js',
-    'node_modules/cytoscape-expand-collapse/cytoscape-expand-collapse.js',
-    'node_modules/cytoscape-context-menus/cytoscape-context-menus.js',
-    'node_modules/cytoscape-context-menus/cytoscape-context-menus.css',
     'node_modules/sigma/build/sigma.require.js',
     'node_modules/sigma/build/plugins/sigma.layout.forceAtlas2.min.js',
     'node_modules/sigma/build/plugins/sigma.plugins.dragNodes.min.js',
     'node_modules/sigma/build/plugins/sigma.plugins.animate.min.js',
-    'node_modules/sigma/build/plugins/sigma.layout.noverlap.min.js',
     'node_modules/d3/d3.min.js',
     'node_modules/crossfilter2/crossfilter.min.js',
     'node_modules/dc/dc.css',
@@ -55,33 +37,23 @@ gulp.task('copy', () => {
     'src/style.css'
   ])
   .pipe(gulp.dest('dist/vendor'));
-    gulp.src([
-      'data/example-3276.json',
-      'data/example.json'
-    ])
-    .pipe(gulp.dest('dist/data'));
-
+  
   gulp.src([
-    'sample-data.json'
+    'data/example-3276.json',
+    'data/example.json'
   ])
-  .pipe(gulp.dest('dist/api'));
-
+  .pipe(gulp.dest('dist/data'));
+  
   gulp.src([
+    'src/fonts/*',
     'node_modules/bootstrap/fonts/*'
   ])
-  .pipe(gulp.dest('dist/fonts'));
+  .pipe(gulp.dest('fonts'));
 });
 
 gulp.task('html', () => {
   gulp.src('src/**/*.html')
   .pipe(gulp.dest('dist'));
-});
-
-gulp.task('sass', () => {
-  return gulp.src('src/**/*.scss')
-    .pipe(sass().on('error', sass.logError))
-    .pipe(concat('style.css'))
-    .pipe(gulp.dest('dist'));
 });
 
 gulp.task('watch', () => {
@@ -94,15 +66,10 @@ gulp.task('watch', () => {
     gulp.start('html');
     browserSync.reload();
   });
-
-  watch('src/**/*.scss', () => {
-    gulp.start('sass');
-    browserSync.reload();
-  });
 });
 
 // build task
-gulp.task('build', ['copy', 'html', 'sass', 'transpile']);
+gulp.task('build', ['copy', 'html', 'transpile']);
 
 // server
 gulp.task('serve', ['build', 'watch'], () => {
